@@ -1,0 +1,4 @@
+machine_id,machine_type,timestamp,spindle_temperature,vibration,spindle_speed,tool_wear
+CNC001,CNC,2026-11-19 08:00,42,0.30,8000,12
+CNC002,CNC,2026-11-19 08:05,55,0.85,15000,38
+CNC003,CNC,2026-11-19 08:10,68,1.20,18000,72
