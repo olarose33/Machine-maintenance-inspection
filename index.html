@@ -14,6 +14,10 @@
       color: #222;
     }
 
+    [hidden] {
+      display: none !important;
+    }
+
     label {
       display: block;
       margin: 16px 0 6px;
@@ -25,23 +29,50 @@
     }
 
     button {
-      margin-left: 6px;
+      cursor: pointer;
     }
 
-    section {
+    section, .card {
       margin-top: 20px;
       padding: 20px;
       border-radius: 8px;
       background: #f2f5f7;
     }
 
-    #result {
-      font-size: 1.3rem;
+    .welcome {
+      padding: 28px;
+      border-radius: 10px;
+      background: #f2f5f7;
+    }
+
+    .welcome h1 {
+      margin-top: 0;
+    }
+
+    .primary-button {
+      border: 0;
+      border-radius: 6px;
+      padding: 12px 18px;
+      background: #176b9a;
+      color: white;
       font-weight: bold;
+    }
+
+    .primary-button:hover {
+      background: #105579;
+    }
+
+    .secondary-button {
+      margin-bottom: 8px;
     }
 
     .note {
       color: #555;
+    }
+
+    #result {
+      font-size: 1.3rem;
+      font-weight: bold;
     }
 
     .table-wrap {
@@ -83,54 +114,90 @@
 </head>
 
 <body>
-  <h1>Machine Status Checker</h1>
-  <p>Select a CSV file hosted with this web app.</p>
+  <main>
+    <!-- Opening page -->
+    <section id="homePage" class="welcome">
+      <h1>Machine Status Checker</h1>
+      <p>
+        This app lets you view sample readings for pumps, CNC machines, and
+        compressors. Choose a hosted sample CSV, select a machine, and view
+        its readings and status in a table.
+      </p>
+      <p>
+        Measurements are shown with units, such as °C, mm/s, psi, and RPM.
+        Pump and CNC status labels use example thresholds. Compressor status
+        is read from the sample CSV.
+      </p>
+      <button type="button" id="openAppButton" class="primary-button">
+        Open the data and status page
+      </button>
+    </section>
 
-  <label for="sampleSelect">Choose a sample file:</label>
-  <select id="sampleSelect">
-    <option value="">Choose a sample</option>
-    <option value="pump">Pump sample</option>
-    <option value="cnc">CNC sample</option>
-    <option value="compressor">Compressor sample</option>
-  </select>
-  <button type="button" id="loadSampleButton">Load sample</button>
+    <!-- Existing data/status page -->
+    <div id="appPage" hidden>
+      <button type="button" id="backButton" class="secondary-button">
+        ← Back to app information
+      </button>
 
-  <label for="machineSelect">Choose a machine:</label>
-  <select id="machineSelect" disabled>
-    <option>Load a sample first</option>
-  </select>
+      <h1>Machine Status Checker</h1>
+      <p>Select a sample CSV hosted with this web app.</p>
+      <p class="note">
+        Pump and CNC statuses use fictional demo thresholds.
+        Compressor status is supplied by its CSV.
+      </p>
 
-  <section id="output" aria-live="polite">
-    Choose a sample file to begin.
-  </section>
+      <label for="sampleSelect">Choose a sample file:</label>
+      <select id="sampleSelect">
+        <option value="">Choose a sample</option>
+        <option value="pump">Pump sample</option>
+        <option value="cnc">CNC sample</option>
+        <option value="compressor">Compressor sample</option>
+      </select>
+      <button type="button" id="loadSampleButton">Load sample</button>
 
-  <section>
-    <h2>Machine Status Table</h2>
-    <p id="tableMessage">No machine readings loaded.</p>
+      <label for="machineSelect">Choose a machine:</label>
+      <select id="machineSelect" disabled>
+        <option>Load a sample first</option>
+      </select>
 
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Machine ID</th>
-            <th>Type</th>
-            <th>Timestamp</th>
-            <th>Temperature</th>
-            <th>Vibration</th>
-            <th>Pressure</th>
-            <th>Flow rate</th>
-            <th>Spindle speed</th>
-            <th>Tool wear</th>
-            <th>Running hours</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody id="statusTable"></tbody>
-      </table>
+      <section id="output" aria-live="polite">
+        Choose a sample file to begin.
+      </section>
+
+      <section>
+        <h2>Machine Status Table</h2>
+        <p id="tableMessage">No machine readings loaded.</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Machine ID</th>
+                <th>Type</th>
+                <th>Timestamp</th>
+                <th>Temperature</th>
+                <th>Vibration</th>
+                <th>Pressure</th>
+                <th>Flow rate</th>
+                <th>Spindle speed</th>
+                <th>Tool wear</th>
+                <th>Running hours</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="statusTable"></tbody>
+          </table>
+        </div>
+      </section>
     </div>
-  </section>
+  </main>
 
   <script>
+    const homePage = document.getElementById("homePage");
+    const appPage = document.getElementById("appPage");
+    const openAppButton = document.getElementById("openAppButton");
+    const backButton = document.getElementById("backButton");
+
     const machineSelect = document.getElementById("machineSelect");
     const output = document.getElementById("output");
     const statusTable = document.getElementById("statusTable");
@@ -157,6 +224,16 @@
       tool_wear: "%",
       running_hours: "hours"
     };
+
+    openAppButton.addEventListener("click", () => {
+      homePage.hidden = true;
+      appPage.hidden = false;
+    });
+
+    backButton.addEventListener("click", () => {
+      appPage.hidden = true;
+      homePage.hidden = false;
+    });
 
     function splitLine(line, delimiter) {
       const fields = [];
@@ -240,15 +317,13 @@
     function getStatus(row, type) {
       if (type === "Compressor") {
         const suppliedStatus = (row.status || "").trim();
-        return suppliedStatus
-          ? { status: suppliedStatus }
-          : { status: "Status missing" };
+        return suppliedStatus || "Status missing";
       }
 
       const vibration = Number(row.vibration);
 
       if (!Number.isFinite(vibration)) {
-        return { status: "Invalid data" };
+        return "Invalid data";
       }
 
       if (type === "CNC") {
@@ -257,46 +332,36 @@
         const toolWear = Number(row.tool_wear);
 
         if (![temperature, spindleSpeed, toolWear].every(Number.isFinite)) {
-          return { status: "Invalid data" };
+          return "Invalid data";
         }
 
         if (temperature >= 65 || vibration >= 1.0 || toolWear >= 70) {
-          return { status: "Critical" };
+          return "Critical";
         }
 
         if (temperature >= 55 || vibration >= 0.7 || toolWear >= 40) {
-          return { status: "Warning" };
+          return "Warning";
         }
 
-        return { status: "Healthy" };
+        return "Healthy";
       }
 
       const temperature = Number(row.temperature);
       const pressure = Number(row.pressure);
 
       if (![temperature, pressure].every(Number.isFinite)) {
-        return { status: "Invalid data" };
+        return "Invalid data";
       }
 
       if (temperature >= 58 || vibration >= 1.0 || pressure <= 100) {
-        return { status: "Critical" };
+        return "Critical";
       }
 
       if (temperature >= 50 || vibration >= 0.7 || pressure <= 110) {
-        return { status: "Warning" };
+        return "Warning";
       }
 
-      return { status: "Healthy" };
-    }
-
-    function getUnit(row, field) {
-      const unitColumn = `${field}_unit`;
-
-      if (row[unitColumn] && row[unitColumn].trim()) {
-        return row[unitColumn].trim();
-      }
-
-      return defaultUnits[field] || "";
+      return "Healthy";
     }
 
     function valueWithUnit(row, field) {
@@ -306,7 +371,11 @@
         return "—";
       }
 
-      const unit = getUnit(row, field);
+      const customUnit = row[`${field}_unit`];
+      const unit = customUnit && customUnit.trim()
+        ? customUnit.trim()
+        : (defaultUnits[field] || "");
+
       return unit ? `${value} ${unit}` : String(value);
     }
 
@@ -339,7 +408,7 @@
 
       for (const row of latestRows) {
         const type = getMachineType(row);
-        const result = getStatus(row, type);
+        const status = getStatus(row, type);
         const tableRow = document.createElement("tr");
 
         let temperature = "—";
@@ -373,7 +442,7 @@
         addCell(tableRow, spindleSpeed);
         addCell(tableRow, toolWear);
         addCell(tableRow, runningHours);
-        addCell(tableRow, result.status, result.status);
+        addCell(tableRow, status, status);
 
         statusTable.appendChild(tableRow);
       }
@@ -414,18 +483,16 @@
       }
 
       const type = getMachineType(latest);
-      const result = getStatus(latest, type);
+      const status = getStatus(latest, type);
 
       output.replaceChildren();
 
       const title = document.createElement("div");
       title.id = "result";
-
-      if (["Healthy", "Warning", "Critical"].includes(result.status)) {
-        title.className = result.status;
+      if (["Healthy", "Warning", "Critical"].includes(status)) {
+        title.className = status;
       }
-
-      title.textContent = `${type} status: ${result.status}`;
+      title.textContent = `${type} status: ${status}`;
 
       const details = document.createElement("p");
       details.textContent =
