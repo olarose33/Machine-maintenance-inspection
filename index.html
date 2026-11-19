@@ -212,82 +212,83 @@
         : "No machine readings were found.";
     }
 
-    fileInput.addEventListener("change", () => {
-      const file = fileInput.files[0];
-      readings = [];
-      machineSelect.replaceChildren();
-      machineSelect.disabled = true;
-      statusTable.replaceChildren();
+    fileInput.addEventListener("change", async () => {
+  const files = [...fileInput.files];
+  readings = [];
+  machineSelect.replaceChildren();
+  machineSelect.disabled = true;
+  statusTable.replaceChildren();
 
-      if (!file) {
-        output.textContent = "Choose a data file to begin.";
-        tableMessage.textContent = "Upload a data file to see machine statuses.";
-        return;
+  if (files.length === 0) {
+    output.textContent = "Choose one or more data files to begin.";
+    tableMessage.textContent = "Upload data files to see machine statuses.";
+    return;
+  }
+
+  try {
+    for (const file of files) {
+      const text = (await file.text()).trim();
+
+      if (!text) {
+        throw new Error(file.name + " is empty.");
       }
 
-      const reader = new FileReader();
+      const lines = text.split(/\r?\n/);
+      const delimiter = lines[0].includes("\t") ? "\t" : ",";
+      const headers = splitLine(lines[0], delimiter)
+        .map(header => header.replace(/^\uFEFF/, "").toLowerCase());
 
-      reader.onload = () => {
-        const text = reader.result.trim();
+      const hasPumpColumns =
+        ["machine_id", "temperature", "vibration", "pressure"]
+          .every(header => headers.includes(header));
 
-        if (!text) {
-          output.textContent = "The file is empty.";
-          tableMessage.textContent = "No data to display.";
-          return;
-        }
+      const hasCncColumns =
+        ["machine_id", "spindle_temperature", "vibration", "spindle_speed", "tool_wear"]
+          .every(header => headers.includes(header));
 
-        const lines = text.split(/\r?\n/);
-        const delimiter = lines[0].includes("\t") ? "\t" : ",";
-        const headers = splitLine(lines[0], delimiter)
-          .map(header => header.replace(/^\uFEFF/, "").toLowerCase());
+      if (!hasPumpColumns && !hasCncColumns) {
+        throw new Error(
+          file.name + " has unrecognized columns. Check that it has machine_id and the required pump or CNC columns."
+        );
+      }
 
-        const hasPumpColumns =
-          ["machine_id", "temperature", "vibration", "pressure"]
-            .every(header => headers.includes(header));
+      const fileReadings = lines.slice(1)
+        .filter(line => line.trim() !== "")
+        .map(line => {
+          const values = splitLine(line, delimiter);
+          return Object.fromEntries(
+            headers.map((header, index) => [header, values[index] ?? ""])
+          );
+        })
+        .filter(row => row.machine_id);
 
-        const hasCncColumns =
-          ["machine_id", "spindle_temperature", "vibration", "spindle_speed", "tool_wear"]
-            .every(header => headers.includes(header));
+      readings.push(...fileReadings);
+    }
 
-        if (!hasPumpColumns && !hasCncColumns) {
-          output.textContent =
-            "The file needs machine_id and either pump columns (temperature, vibration, pressure) or CNC columns (spindle_temperature, vibration, spindle_speed, tool_wear).";
-          tableMessage.textContent = "Check the file’s column headings.";
-          return;
-        }
+    const machineIds = [...new Set(readings.map(row => row.machine_id))];
 
-        readings = lines.slice(1)
-          .filter(line => line.trim() !== "")
-          .map(line => {
-            const values = splitLine(line, delimiter);
-            return Object.fromEntries(
-              headers.map((header, index) => [header, values[index] ?? ""])
-            );
-          })
-          .filter(row => row.machine_id);
+    if (machineIds.length === 0) {
+      output.textContent = "No machine readings were found in the selected files.";
+      tableMessage.textContent = "No machine readings were found.";
+      return;
+    }
 
-        const machineIds = [...new Set(readings.map(row => row.machine_id))];
+    for (const id of machineIds) {
+      const option = document.createElement("option");
+      option.value = id;
+      option.textContent = id;
+      machineSelect.appendChild(option);
+    }
 
-        if (machineIds.length === 0) {
-          output.textContent = "No machine readings were found in the file.";
-          tableMessage.textContent = "No machine readings were found.";
-          return;
-        }
-
-        for (const id of machineIds) {
-          const option = document.createElement("option");
-          option.value = id;
-          option.textContent = id;
-          machineSelect.appendChild(option);
-        }
-
-        machineSelect.disabled = false;
-        renderTable();
-        showSelectedMachine();
-      };
-
-      reader.readAsText(file);
-    });
+    machineSelect.disabled = false;
+    renderTable();
+    showSelectedMachine();
+  } catch (error) {
+    readings = [];
+    output.textContent = error.message;
+    tableMessage.textContent = "Could not load the selected files.";
+  }
+});
 
     machineSelect.addEventListener("change", showSelectedMachine);
 
