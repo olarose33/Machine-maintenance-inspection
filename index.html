@@ -1,532 +1,532 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Machine Status Checker</title>
+---
+layout: default
+title: Machine Status Checker
+---
 
-  <style>
-    body {
-      max-width: 1100px;
-      margin: 40px auto;
-      padding: 0 16px;
-      font-family: Arial, sans-serif;
-      color: #222;
-    }
+<style>
+  :reset,
+  body {
+    box-sizing: border-box;
+  }
 
-    label {
-      display: block;
-      margin: 16px 0 6px;
-    }
+  body {
+    max-width: 1100px;
+  }
 
-    select,
-    button {
-      padding: 8px;
-      font: inherit;
-    }
+  label {
+    display: block;
+    margin: 16px 0 6px;
+  }
 
-    section {
-      margin-top: 20px;
-      padding: 20px;
-      border-radius: 8px;
-      background: #f2f5f7;
-    }
+  select,
+  button {
+    padding: 8px;
+    font: inherit;
+  }
 
-    #result {
-      font-size: 1.3rem;
-      font-weight: bold;
-    }
+  button {
+    cursor: pointer;
+  }
 
-    .note {
-      color: #555;
-    }
+  section {
+    margin-top: 20px;
+    padding: 20px;
+    border-radius: 8px;
+    background: #f2f5f7;
+  }
 
-    .table-wrap {
-      overflow-x: auto;
-      margin-top: 12px;
-    }
+  #result {
+    font-size: 1.3rem;
+    font-weight: bold;
+  }
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
+  .note {
+    color: #555;
+  }
 
-    th,
-    td {
-      padding: 8px;
-      border: 1px solid #ccc;
-      text-align: left;
-      white-space: nowrap;
-    }
+  .table-wrap {
+    overflow-x: auto;
+    margin-top: 12px;
+  }
 
-    th {
-      background: #e9eef2;
-    }
+  table {
+    display: table;
+    width: 100%;
+    border-collapse: collapse;
+  }
 
-    .Healthy {
-      color: #176b2c;
-      font-weight: bold;
-    }
+  th,
+  td {
+    padding: 8px;
+    border: 1px solid #ccc;
+    text-align: left;
+    white-space: nowrap;
+  }
 
-    .Warning {
-      color: #8a5700;
-      font-weight: bold;
-    }
+  th {
+    background: #e9eef2;
+  }
 
-    .Critical {
-      color: #a32121;
-      font-weight: bold;
-    }
-  </style>
-</head>
+  .Healthy {
+    color: #176b2c;
+    font-weight: bold;
+  }
 
-<body>
-  <h1>Machine Status Checker</h1>
-  <p>Select a CSV file hosted with this web app.</p>
-  <p class="note">
-    Pump and CNC statuses use fictional demo thresholds.
-    Compressor status is supplied by the CSV.
-  </p>
+  .Warning {
+    color: #8a5700;
+    font-weight: bold;
+  }
 
-  <label for="sampleSelect">Choose a sample file:</label>
-  <select id="sampleSelect">
-    <option value="">Choose a sample</option>
-    <option value="pump">Pump sample</option>
-    <option value="cnc">CNC sample</option>
-    <option value="compressor">Compressor sample</option>
-  </select>
-  <button type="button" id="loadSampleButton">Load sample</button>
+  .Critical {
+    color: #a32121;
+    font-weight: bold;
+  }
+</style>
 
-  <label for="machineSelect">Choose a machine:</label>
-  <select id="machineSelect" disabled>
-    <option>Load a sample first</option>
-  </select>
+<h1>Machine Status Checker</h1>
+<p>Select a CSV file hosted with this web app.</p>
+<p class="note">
+  Pump and CNC statuses use fictional demo thresholds.
+  Compressor status is supplied by the CSV.
+</p>
 
-  <section id="output" aria-live="polite">
-    Choose a sample file to begin.
-  </section>
+<label for="sampleSelect">Choose a sample file:</label>
+<select id="sampleSelect">
+  <option value="">Choose a sample</option>
+  <option value="pump">Pump sample</option>
+  <option value="cnc">CNC sample</option>
+  <option value="compressor">Compressor sample</option>
+</select>
+<button type="button" id="loadSampleButton">Load sample</button>
 
-  <section>
-    <h2>Machine Status Table</h2>
-    <p id="tableMessage">No machine readings loaded.</p>
+<label for="machineSelect">Choose a machine:</label>
+<select id="machineSelect" disabled>
+  <option>Load a sample first</option>
+</select>
 
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Machine ID</th>
-            <th>Type</th>
-            <th>Timestamp</th>
-            <th>Temperature</th>
-            <th>Vibration</th>
-            <th>Pressure</th>
-            <th>Flow rate</th>
-            <th>Spindle speed</th>
-            <th>Tool wear</th>
-            <th>Running hours</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody id="statusTable"></tbody>
-      </table>
-    </div>
-  </section>
+<section id="output" aria-live="polite">
+  Choose a sample file to begin.
+</section>
 
-  <script>
-    const machineSelect = document.getElementById("machineSelect");
-    const output = document.getElementById("output");
-    const statusTable = document.getElementById("statusTable");
-    const tableMessage = document.getElementById("tableMessage");
-    const sampleSelect = document.getElementById("sampleSelect");
-    const loadSampleButton = document.getElementById("loadSampleButton");
+<section>
+  <h2>Machine Status Table</h2>
+  <p id="tableMessage">No machine readings loaded.</p>
 
-    let readings = [];
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Machine ID</th>
+          <th>Type</th>
+          <th>Timestamp</th>
+          <th>Temperature</th>
+          <th>Vibration</th>
+          <th>Pressure</th>
+          <th>Flow rate</th>
+          <th>Spindle speed</th>
+          <th>Tool wear</th>
+          <th>Running hours</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="statusTable"></tbody>
+    </table>
+  </div>
+</section>
 
-    const sampleFilePaths = {
-      pump: "samples/pump.csv",
-      cnc: "samples/cnc.csv",
-      compressor: "samples/compressor.csv"
-    };
+<script>
+  const machineSelect = document.getElementById("machineSelect");
+  const output = document.getElementById("output");
+  const statusTable = document.getElementById("statusTable");
+  const tableMessage = document.getElementById("tableMessage");
+  const sampleSelect = document.getElementById("sampleSelect");
+  const loadSampleButton = document.getElementById("loadSampleButton");
 
-    const defaultUnits = {
-      temperature: "°C",
-      spindle_temperature: "°C",
-      vibration: "mm/s",
-      pressure: "psi",
-      discharge_pressure: "psi",
-      flow_rate: "L/min",
-      spindle_speed: "RPM",
-      tool_wear: "%",
-      running_hours: "hours"
-    };
+  let readings = [];
 
-    function splitLine(line, delimiter) {
-      const fields = [];
-      let value = "";
-      let insideQuotes = false;
+  const sampleFilePaths = {
+    pump: "samples/pump.csv",
+    cnc: "samples/cnc.csv",
+    compressor: "samples/compressor.csv"
+  };
 
-      for (let i = 0; i < line.length; i++) {
-        const character = line[i];
+  const defaultUnits = {
+    temperature: "°C",
+    spindle_temperature: "°C",
+    vibration: "mm/s",
+    pressure: "psi",
+    discharge_pressure: "psi",
+    flow_rate: "L/min",
+    spindle_speed: "RPM",
+    tool_wear: "%",
+    running_hours: "hours"
+  };
 
-        if (character === '"') {
-          if (insideQuotes && line[i + 1] === '"') {
-            value += '"';
-            i++;
-          } else {
-            insideQuotes = !insideQuotes;
-          }
-        } else if (character === delimiter && !insideQuotes) {
-          fields.push(value.trim());
-          value = "";
+  function splitLine(line, delimiter) {
+    const fields = [];
+    let value = "";
+    let insideQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const character = line[i];
+
+      if (character === '"') {
+        if (insideQuotes && line[i + 1] === '"') {
+          value += '"';
+          i++;
         } else {
-          value += character;
+          insideQuotes = !insideQuotes;
         }
+      } else if (character === delimiter && !insideQuotes) {
+        fields.push(value.trim());
+        value = "";
+      } else {
+        value += character;
       }
-
-      fields.push(value.trim());
-      return fields;
     }
 
-    function parseCsv(text) {
-      const lines = text.trim().split(/\r?\n/);
+    fields.push(value.trim());
+    return fields;
+  }
 
-      if (lines.length < 2) {
-        throw new Error("The selected CSV has no data rows.");
-      }
+  function parseCsv(text) {
+    const lines = text.trim().split(/\r?\n/);
 
-      const delimiter = lines[0].includes("\t") ? "\t" : ",";
-      const headers = splitLine(lines[0], delimiter)
-        .map(header => header.replace(/^\uFEFF/, "").trim().toLowerCase());
-
-      const rows = lines.slice(1)
-        .filter(line => line.trim() !== "")
-        .map(line => {
-          const values = splitLine(line, delimiter);
-
-          return Object.fromEntries(
-            headers.map((header, index) => [
-              header,
-              values[index] ? values[index].trim() : ""
-            ])
-          );
-        })
-        .filter(row => row.machine_id);
-
-      return { headers, rows };
+    if (lines.length < 2) {
+      throw new Error("The selected CSV has no data rows.");
     }
 
-    function getMachineType(row) {
-      const declaredType =
-        (row.machine_type || row.type || "").trim().toLowerCase();
+    const delimiter = lines[0].includes("\t") ? "\t" : ",";
+    const headers = splitLine(lines[0], delimiter)
+      .map(header => header.replace(/^\uFEFF/, "").trim().toLowerCase());
 
-      if (
-        declaredType.includes("compressor") ||
-        row.discharge_pressure !== undefined ||
-        row.running_hours !== undefined
-      ) {
-        return "Compressor";
-      }
+    const rows = lines.slice(1)
+      .filter(line => line.trim() !== "")
+      .map(line => {
+        const values = splitLine(line, delimiter);
 
-      if (
-        declaredType.includes("cnc") ||
-        row.spindle_temperature !== undefined ||
-        row.spindle_speed !== undefined ||
-        row.tool_wear !== undefined
-      ) {
-        return "CNC";
-      }
+        return Object.fromEntries(
+          headers.map((header, index) => [
+            header,
+            values[index] ? values[index].trim() : ""
+          ])
+        );
+      })
+      .filter(row => row.machine_id);
 
-      return "Pump";
+    return { headers, rows };
+  }
+
+  function getMachineType(row) {
+    const declaredType =
+      (row.machine_type || row.type || "").trim().toLowerCase();
+
+    if (
+      declaredType.includes("compressor") ||
+      row.discharge_pressure !== undefined ||
+      row.running_hours !== undefined
+    ) {
+      return "Compressor";
     }
 
-    function getStatus(row, type) {
-      if (type === "Compressor") {
-        return (row.status || "").trim() || "Status missing";
-      }
+    if (
+      declaredType.includes("cnc") ||
+      row.spindle_temperature !== undefined ||
+      row.spindle_speed !== undefined ||
+      row.tool_wear !== undefined
+    ) {
+      return "CNC";
+    }
 
-      const vibration = Number(row.vibration);
+    return "Pump";
+  }
 
-      if (!Number.isFinite(vibration)) {
+  function getStatus(row, type) {
+    if (type === "Compressor") {
+      return (row.status || "").trim() || "Status missing";
+    }
+
+    const vibration = Number(row.vibration);
+
+    if (!Number.isFinite(vibration)) {
+      return "Invalid data";
+    }
+
+    if (type === "CNC") {
+      const temperature = Number(row.spindle_temperature);
+      const spindleSpeed = Number(row.spindle_speed);
+      const toolWear = Number(row.tool_wear);
+
+      if (![temperature, spindleSpeed, toolWear].every(Number.isFinite)) {
         return "Invalid data";
       }
 
-      if (type === "CNC") {
-        const temperature = Number(row.spindle_temperature);
-        const spindleSpeed = Number(row.spindle_speed);
-        const toolWear = Number(row.tool_wear);
-
-        if (![temperature, spindleSpeed, toolWear].every(Number.isFinite)) {
-          return "Invalid data";
-        }
-
-        if (temperature >= 65 || vibration >= 1.0 || toolWear >= 70) {
-          return "Critical";
-        }
-
-        if (temperature >= 55 || vibration >= 0.7 || toolWear >= 40) {
-          return "Warning";
-        }
-
-        return "Healthy";
-      }
-
-      const temperature = Number(row.temperature);
-      const pressure = Number(row.pressure);
-
-      if (![temperature, pressure].every(Number.isFinite)) {
-        return "Invalid data";
-      }
-
-      if (temperature >= 58 || vibration >= 1.0 || pressure <= 100) {
+      if (temperature >= 65 || vibration >= 1.0 || toolWear >= 70) {
         return "Critical";
       }
 
-      if (temperature >= 50 || vibration >= 0.7 || pressure <= 110) {
+      if (temperature >= 55 || vibration >= 0.7 || toolWear >= 40) {
         return "Warning";
       }
 
       return "Healthy";
     }
 
-    function valueWithUnit(row, field) {
-      const value = row[field];
+    const temperature = Number(row.temperature);
+    const pressure = Number(row.pressure);
 
-      if (value === undefined || value === null || value === "") {
-        return "—";
-      }
-
-      const customUnit = row[`${field}_unit`];
-      const unit = customUnit && customUnit.trim()
-        ? customUnit.trim()
-        : (defaultUnits[field] || "");
-
-      return unit ? `${value} ${unit}` : String(value);
+    if (![temperature, pressure].every(Number.isFinite)) {
+      return "Invalid data";
     }
 
-    function latestReadingPerMachine() {
-      const latestById = new Map();
-
-      for (const row of readings) {
-        if (row.machine_id) {
-          latestById.set(row.machine_id, row);
-        }
-      }
-
-      return [...latestById.values()];
+    if (temperature >= 58 || vibration >= 1.0 || pressure <= 100) {
+      return "Critical";
     }
 
-    function addCell(rowElement, text, className = "") {
-      const cell = document.createElement("td");
-      cell.textContent = text || "—";
-
-      if (["Healthy", "Warning", "Critical"].includes(className)) {
-        cell.className = className;
-      }
-
-      rowElement.appendChild(cell);
+    if (temperature >= 50 || vibration >= 0.7 || pressure <= 110) {
+      return "Warning";
     }
 
-    function renderTable() {
-      statusTable.replaceChildren();
-      const latestRows = latestReadingPerMachine();
+    return "Healthy";
+  }
 
-      for (const row of latestRows) {
-        const type = getMachineType(row);
-        const status = getStatus(row, type);
-        const tableRow = document.createElement("tr");
+  function valueWithUnit(row, field) {
+    const value = row[field];
 
-        let temperature = "—";
-        let pressure = "—";
-        let flowRate = "—";
-        let spindleSpeed = "—";
-        let toolWear = "—";
-        let runningHours = "—";
-
-        if (type === "CNC") {
-          temperature = valueWithUnit(row, "spindle_temperature");
-          spindleSpeed = valueWithUnit(row, "spindle_speed");
-          toolWear = valueWithUnit(row, "tool_wear");
-        } else if (type === "Compressor") {
-          temperature = valueWithUnit(row, "temperature");
-          pressure = valueWithUnit(row, "discharge_pressure");
-          runningHours = valueWithUnit(row, "running_hours");
-        } else {
-          temperature = valueWithUnit(row, "temperature");
-          pressure = valueWithUnit(row, "pressure");
-          flowRate = valueWithUnit(row, "flow_rate");
-        }
-
-        addCell(tableRow, row.machine_id);
-        addCell(tableRow, type);
-        addCell(tableRow, row.timestamp);
-        addCell(tableRow, temperature);
-        addCell(tableRow, valueWithUnit(row, "vibration"));
-        addCell(tableRow, pressure);
-        addCell(tableRow, flowRate);
-        addCell(tableRow, spindleSpeed);
-        addCell(tableRow, toolWear);
-        addCell(tableRow, runningHours);
-        addCell(tableRow, status, status);
-
-        statusTable.appendChild(tableRow);
-      }
-
-      tableMessage.textContent = latestRows.length
-        ? "Showing the latest row for each machine."
-        : "No machine readings were found.";
+    if (value === undefined || value === null || value === "") {
+      return "—";
     }
 
-    function fillMachineSelector() {
-      machineSelect.replaceChildren();
+    const unitColumn = row[`${field}_unit`];
+    const unit = unitColumn && unitColumn.trim()
+      ? unitColumn.trim()
+      : (defaultUnits[field] || "");
 
-      const machineIds =
-        [...new Set(readings.map(row => row.machine_id).filter(Boolean))];
+    return unit ? `${value} ${unit}` : String(value);
+  }
 
-      if (machineIds.length === 0) {
-        machineSelect.add(new Option("No machines found", ""));
-        machineSelect.disabled = true;
-        return;
+  function latestReadingPerMachine() {
+    const latestById = new Map();
+
+    for (const row of readings) {
+      if (row.machine_id) {
+        latestById.set(row.machine_id, row);
       }
-
-      for (const id of machineIds) {
-        machineSelect.add(new Option(id, id));
-      }
-
-      machineSelect.disabled = false;
     }
 
-    function showSelectedMachine() {
-      const selectedId = machineSelect.value;
-      const latest = readings
-        .filter(row => row.machine_id === selectedId)
-        .at(-1);
+    return [...latestById.values()];
+  }
 
-      if (!latest) {
-        output.textContent = "No reading found for this machine.";
-        return;
-      }
+  function addCell(rowElement, text, className = "") {
+    const cell = document.createElement("td");
+    cell.textContent = text || "—";
 
-      const type = getMachineType(latest);
-      const status = getStatus(latest, type);
+    if (["Healthy", "Warning", "Critical"].includes(className)) {
+      cell.className = className;
+    }
 
-      output.replaceChildren();
+    rowElement.appendChild(cell);
+  }
 
-      const title = document.createElement("div");
-      title.id = "result";
+  function renderTable() {
+    statusTable.replaceChildren();
+    const latestRows = latestReadingPerMachine();
 
-      if (["Healthy", "Warning", "Critical"].includes(status)) {
-        title.className = status;
-      }
+    for (const row of latestRows) {
+      const type = getMachineType(row);
+      const status = getStatus(row, type);
+      const tableRow = document.createElement("tr");
 
-      title.textContent = `${type} status: ${status}`;
-
-      const details = document.createElement("p");
-      details.textContent =
-        `Latest reading for ${selectedId}` +
-        (latest.timestamp ? ` at ${latest.timestamp}` : "") +
-        ":";
-
-      const list = document.createElement("ul");
-      let fields;
+      let temperature = "—";
+      let pressure = "—";
+      let flowRate = "—";
+      let spindleSpeed = "—";
+      let toolWear = "—";
+      let runningHours = "—";
 
       if (type === "CNC") {
-        fields = [
-          ["Spindle temperature",
-            valueWithUnit(latest, "spindle_temperature")],
-          ["Vibration", valueWithUnit(latest, "vibration")],
-          ["Spindle speed", valueWithUnit(latest, "spindle_speed")],
-          ["Tool wear", valueWithUnit(latest, "tool_wear")]
-        ];
+        temperature = valueWithUnit(row, "spindle_temperature");
+        spindleSpeed = valueWithUnit(row, "spindle_speed");
+        toolWear = valueWithUnit(row, "tool_wear");
       } else if (type === "Compressor") {
-        fields = [
-          ["Discharge pressure",
-            valueWithUnit(latest, "discharge_pressure")],
-          ["Temperature", valueWithUnit(latest, "temperature")],
-          ["Vibration", valueWithUnit(latest, "vibration")],
-          ["Running hours", valueWithUnit(latest, "running_hours")],
-          ["Supplied status", latest.status || "—"]
-        ];
+        temperature = valueWithUnit(row, "temperature");
+        pressure = valueWithUnit(row, "discharge_pressure");
+        runningHours = valueWithUnit(row, "running_hours");
       } else {
-        fields = [
-          ["Temperature", valueWithUnit(latest, "temperature")],
-          ["Vibration", valueWithUnit(latest, "vibration")],
-          ["Pressure", valueWithUnit(latest, "pressure")],
-          ["Flow rate", valueWithUnit(latest, "flow_rate")]
-        ];
+        temperature = valueWithUnit(row, "temperature");
+        pressure = valueWithUnit(row, "pressure");
+        flowRate = valueWithUnit(row, "flow_rate");
       }
 
-      for (const [label, value] of fields) {
-        const item = document.createElement("li");
-        item.textContent = `${label}: ${value}`;
-        list.appendChild(item);
-      }
+      addCell(tableRow, row.machine_id);
+      addCell(tableRow, type);
+      addCell(tableRow, row.timestamp);
+      addCell(tableRow, temperature);
+      addCell(tableRow, valueWithUnit(row, "vibration"));
+      addCell(tableRow, pressure);
+      addCell(tableRow, flowRate);
+      addCell(tableRow, spindleSpeed);
+      addCell(tableRow, toolWear);
+      addCell(tableRow, runningHours);
+      addCell(tableRow, status, status);
 
-      output.append(title, details, list);
+      statusTable.appendChild(tableRow);
     }
 
-    loadSampleButton.addEventListener("click", async () => {
-      const path = sampleFilePaths[sampleSelect.value];
+    tableMessage.textContent = latestRows.length
+      ? "Showing the latest row for each machine."
+      : "No machine readings were found.";
+  }
 
-      if (!path) {
-        output.textContent = "Choose a sample file first.";
-        return;
+  function fillMachineSelector() {
+    machineSelect.replaceChildren();
+
+    const machineIds =
+      [...new Set(readings.map(row => row.machine_id).filter(Boolean))];
+
+    if (machineIds.length === 0) {
+      machineSelect.add(new Option("No machines found", ""));
+      machineSelect.disabled = true;
+      return;
+    }
+
+    for (const id of machineIds) {
+      machineSelect.add(new Option(id, id));
+    }
+
+    machineSelect.disabled = false;
+  }
+
+  function showSelectedMachine() {
+    const selectedId = machineSelect.value;
+    const latest = readings
+      .filter(row => row.machine_id === selectedId)
+      .at(-1);
+
+    if (!latest) {
+      output.textContent = "No reading found for this machine.";
+      return;
+    }
+
+    const type = getMachineType(latest);
+    const status = getStatus(latest, type);
+
+    output.replaceChildren();
+
+    const title = document.createElement("div");
+    title.id = "result";
+
+    if (["Healthy", "Warning", "Critical"].includes(status)) {
+      title.className = status;
+    }
+
+    title.textContent = `${type} status: ${status}`;
+
+    const details = document.createElement("p");
+    details.textContent =
+      `Latest reading for ${selectedId}` +
+      (latest.timestamp ? ` at ${latest.timestamp}` : "") +
+      ":";
+
+    const list = document.createElement("ul");
+    let fields;
+
+    if (type === "CNC") {
+      fields = [
+        ["Spindle temperature",
+          valueWithUnit(latest, "spindle_temperature")],
+        ["Vibration", valueWithUnit(latest, "vibration")],
+        ["Spindle speed", valueWithUnit(latest, "spindle_speed")],
+        ["Tool wear", valueWithUnit(latest, "tool_wear")]
+      ];
+    } else if (type === "Compressor") {
+      fields = [
+        ["Discharge pressure",
+          valueWithUnit(latest, "discharge_pressure")],
+        ["Temperature", valueWithUnit(latest, "temperature")],
+        ["Vibration", valueWithUnit(latest, "vibration")],
+        ["Running hours", valueWithUnit(latest, "running_hours")],
+        ["Supplied status", latest.status || "—"]
+      ];
+    } else {
+      fields = [
+        ["Temperature", valueWithUnit(latest, "temperature")],
+        ["Vibration", valueWithUnit(latest, "vibration")],
+        ["Pressure", valueWithUnit(latest, "pressure")],
+        ["Flow rate", valueWithUnit(latest, "flow_rate")]
+      ];
+    }
+
+    for (const [label, value] of fields) {
+      const item = document.createElement("li");
+      item.textContent = `${label}: ${value}`;
+      list.appendChild(item);
+    }
+
+    output.append(title, details, list);
+  }
+
+  loadSampleButton.addEventListener("click", async () => {
+    const path = sampleFilePaths[sampleSelect.value];
+
+    if (!path) {
+      output.textContent = "Choose a sample file first.";
+      return;
+    }
+
+    loadSampleButton.disabled = true;
+    output.textContent = "Loading sample…";
+
+    try {
+      const response = await fetch(new URL(path, document.baseURI));
+
+      if (!response.ok) {
+        throw new Error(
+          `Could not load ${path} (HTTP ${response.status}).`
+        );
       }
 
-      loadSampleButton.disabled = true;
-      output.textContent = "Loading sample…";
+      const { headers, rows } = parseCsv(await response.text());
 
-      try {
-        const response = await fetch(new URL(path, document.baseURI));
+      const hasPumpColumns =
+        ["machine_id", "temperature", "vibration", "pressure"]
+          .every(header => headers.includes(header));
 
-        if (!response.ok) {
-          throw new Error(
-            `Could not load ${path} (HTTP ${response.status}).`
-          );
-        }
+      const hasCncColumns =
+        ["machine_id", "spindle_temperature", "vibration",
+          "spindle_speed", "tool_wear"]
+          .every(header => headers.includes(header));
 
-        const { headers, rows } = parseCsv(await response.text());
+      const hasCompressorColumns =
+        ["machine_id", "discharge_pressure", "temperature",
+          "vibration", "running_hours", "status"]
+          .every(header => headers.includes(header));
 
-        const hasPumpColumns =
-          ["machine_id", "temperature", "vibration", "pressure"]
-            .every(header => headers.includes(header));
-
-        const hasCncColumns =
-          ["machine_id", "spindle_temperature", "vibration",
-            "spindle_speed", "tool_wear"]
-            .every(header => headers.includes(header));
-
-        const hasCompressorColumns =
-          ["machine_id", "discharge_pressure", "temperature",
-            "vibration", "running_hours", "status"]
-            .every(header => headers.includes(header));
-
-        if (!(hasPumpColumns || hasCncColumns || hasCompressorColumns)) {
-          throw new Error(
-            "The CSV headers do not match a pump, CNC, or compressor sample."
-          );
-        }
-
-        if (rows.length === 0) {
-          throw new Error("The selected sample file has no machine readings.");
-        }
-
-        readings = rows;
-        fillMachineSelector();
-        renderTable();
-        showSelectedMachine();
-      } catch (error) {
-        readings = [];
-        fillMachineSelector();
-        statusTable.replaceChildren();
-        tableMessage.textContent = "Could not load the sample file.";
-        output.textContent =
-          `${error.message} Check that the CSV is deployed in the samples folder.`;
-      } finally {
-        loadSampleButton.disabled = false;
+      if (!(hasPumpColumns || hasCncColumns || hasCompressorColumns)) {
+        throw new Error(
+          "The CSV headers do not match a pump, CNC, or compressor sample."
+        );
       }
-    });
 
-    machineSelect.addEventListener("change", showSelectedMachine);
-  </script>
-</body>
-</html>
+      if (rows.length === 0) {
+        throw new Error("The selected sample file has no machine readings.");
+      }
+
+      readings = rows;
+      fillMachineSelector();
+      renderTable();
+      showSelectedMachine();
+    } catch (error) {
+      readings = [];
+      fillMachineSelector();
+      statusTable.replaceChildren();
+      tableMessage.textContent = "Could not load the sample file.";
+      output.textContent =
+        `${error.message} Check that the CSV is deployed in the samples folder.`;
+    } finally {
+      loadSampleButton.disabled = false;
+    }
+  });
+
+  machineSelect.addEventListener("change", showSelectedMachine);
+</script>
