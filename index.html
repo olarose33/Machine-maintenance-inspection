@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Pump Health Checker</title>
+  <title>Machine Status Checker</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      max-width: 700px;
+      max-width: 1000px;
       margin: 40px auto;
       padding: 0 16px;
       color: #222;
@@ -22,27 +22,65 @@
     }
     #result { font-size: 1.3rem; font-weight: bold; }
     .note { color: #555; }
+    .table-wrap { overflow-x: auto; margin-top: 12px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: left;
+      white-space: nowrap;
+    }
+    th { background: #e9eef2; }
+    .Healthy { color: #176b2c; font-weight: bold; }
+    .Warning { color: #8a5700; font-weight: bold; }
+    .Critical { color: #a32121; font-weight: bold; }
   </style>
 </head>
 <body>
-  <h1>Pump Health Checker</h1>
-  <p>Upload a data file with machine_id, timestamp, temperature, vibration, and pressure columns.</p>
-  <p class="note"><strong>Demo only:</strong> status thresholds are examples, not real pump limits or maintenance advice.</p>
+  <h1>Machine Status Checker</h1>
+  <p>Upload pump or CNC readings to view each machine’s latest row in a status table.</p>
+  <p class="note"><strong>Demo only:</strong> example thresholds are not real machine limits or maintenance advice.</p>
 
   <label for="csvFile">Choose your data file:</label>
   <input type="file" id="csvFile" accept=".csv,.tsv,.txt">
 
-  <label for="machineSelect">Choose a machine:</label>
+  <label for="machineSelect">Choose a machine for details:</label>
   <select id="machineSelect" disabled>
     <option>Upload a data file first</option>
   </select>
 
   <section id="output" aria-live="polite">Choose a data file to begin.</section>
 
+  <section>
+    <h2>Machine Status Table</h2>
+    <p id="tableMessage">Upload a data file to see machine statuses.</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Machine ID</th>
+            <th>Type</th>
+            <th>Timestamp</th>
+            <th>Temperature</th>
+            <th>Vibration</th>
+            <th>Pressure</th>
+            <th>Spindle speed</th>
+            <th>Tool wear</th>
+            <th>Demo status</th>
+          </tr>
+        </thead>
+        <tbody id="statusTable"></tbody>
+      </table>
+    </div>
+  </section>
+
   <script>
     const fileInput = document.getElementById("csvFile");
     const machineSelect = document.getElementById("machineSelect");
     const output = document.getElementById("output");
+    const statusTable = document.getElementById("statusTable");
+    const tableMessage = document.getElementById("tableMessage");
+
     let readings = [];
 
     function splitLine(line, delimiter) {
@@ -72,14 +110,119 @@
       return fields;
     }
 
+    function getMachineType(row) {
+      const declaredType = (row.machine_type || row.type || "").toLowerCase();
+
+      if (
+        declaredType.includes("cnc") ||
+        row.spindle_temperature !== undefined ||
+        row.spindle_speed !== undefined ||
+        row.tool_wear !== undefined
+      ) {
+        return "CNC";
+      }
+
+      return "Pump";
+    }
+
+    function getStatus(row, type) {
+      const vibration = Number(row.vibration);
+
+      if (!Number.isFinite(vibration)) {
+        return { status: "Invalid data", error: true };
+      }
+
+      if (type === "CNC") {
+        const temperature = Number(row.spindle_temperature);
+        const speed = Number(row.spindle_speed);
+        const wear = Number(row.tool_wear);
+
+        if (![temperature, speed, wear].every(Number.isFinite)) {
+          return { status: "Invalid data", error: true };
+        }
+
+        // Fictional demo thresholds only; replace with validated machine limits.
+        if (temperature >= 65 || vibration >= 1.0 || wear >= 70) {
+          return { status: "Critical", error: false };
+        }
+        if (temperature >= 55 || vibration >= 0.7 || wear >= 40) {
+          return { status: "Warning", error: false };
+        }
+        return { status: "Healthy", error: false };
+      }
+
+      const temperature = Number(row.temperature);
+      const pressure = Number(row.pressure);
+
+      if (![temperature, pressure].every(Number.isFinite)) {
+        return { status: "Invalid data", error: true };
+      }
+
+      // Fictional demo thresholds only; replace with validated machine limits.
+      if (temperature >= 58 || vibration >= 1.0 || pressure <= 100) {
+        return { status: "Critical", error: false };
+      }
+      if (temperature >= 50 || vibration >= 0.7 || pressure <= 110) {
+        return { status: "Warning", error: false };
+      }
+      return { status: "Healthy", error: false };
+    }
+
+    function latestReadingPerMachine() {
+      const latestById = new Map();
+
+      // The last row for each machine in the uploaded file is treated as latest.
+      for (const row of readings) {
+        latestById.set(row.machine_id, row);
+      }
+
+      return [...latestById.values()];
+    }
+
+    function addCell(rowElement, text, className = "") {
+      const cell = document.createElement("td");
+      cell.textContent = text || "—";
+      if (className) cell.className = className;
+      rowElement.appendChild(cell);
+    }
+
+    function renderTable() {
+      statusTable.replaceChildren();
+      const latestRows = latestReadingPerMachine();
+
+      for (const row of latestRows) {
+        const type = getMachineType(row);
+        const result = getStatus(row, type);
+        const tableRow = document.createElement("tr");
+
+        addCell(tableRow, row.machine_id);
+        addCell(tableRow, type);
+        addCell(tableRow, row.timestamp);
+        addCell(tableRow, type === "CNC" ? row.spindle_temperature : row.temperature);
+        addCell(tableRow, row.vibration);
+        addCell(tableRow, row.pressure);
+        addCell(tableRow, row.spindle_speed);
+        addCell(tableRow, row.tool_wear);
+        addCell(tableRow, result.status, result.status);
+
+        statusTable.appendChild(tableRow);
+      }
+
+      tableMessage.textContent = latestRows.length
+        ? "Showing the last row in the file for each machine."
+        : "No machine readings were found.";
+    }
+
     fileInput.addEventListener("change", () => {
       const file = fileInput.files[0];
       readings = [];
       machineSelect.replaceChildren();
       machineSelect.disabled = true;
+      statusTable.replaceChildren();
 
       if (!file) {
         output.textContent = "Choose a data file to begin.";
+        tableMessage.textContent = "Upload a data file to see machine statuses.";
         return;
       }
 
@@ -87,21 +230,30 @@
 
       reader.onload = () => {
         const text = reader.result.trim();
+
         if (!text) {
           output.textContent = "The file is empty.";
+          tableMessage.textContent = "No data to display.";
           return;
         }
 
         const lines = text.split(/\r?\n/);
         const delimiter = lines[0].includes("\t") ? "\t" : ",";
         const headers = splitLine(lines[0], delimiter)
-          .map(header => header.toLowerCase());
+          .map(header => header.replace(/^\uFEFF/, "").toLowerCase());
 
-        const required = ["machine_id", "temperature", "vibration", "pressure"];
-        const missing = required.filter(header => !headers.includes(header));
+        const hasPumpColumns =
+          ["machine_id", "temperature", "vibration", "pressure"]
+            .every(header => headers.includes(header));
 
-        if (missing.length) {
-          output.textContent = "Missing required column(s): " + missing.join(", ");
+        const hasCncColumns =
+          ["machine_id", "spindle_temperature", "vibration", "spindle_speed", "tool_wear"]
+            .every(header => headers.includes(header));
+
+        if (!hasPumpColumns && !hasCncColumns) {
+          output.textContent =
+            "The file needs machine_id and either pump columns (temperature, vibration, pressure) or CNC columns (spindle_temperature, vibration, spindle_speed, tool_wear).";
+          tableMessage.textContent = "Check the file’s column headings.";
           return;
         }
 
@@ -119,6 +271,7 @@
 
         if (machineIds.length === 0) {
           output.textContent = "No machine readings were found in the file.";
+          tableMessage.textContent = "No machine readings were found.";
           return;
         }
 
@@ -130,6 +283,7 @@
         }
 
         machineSelect.disabled = false;
+        renderTable();
         showSelectedMachine();
       };
 
@@ -148,39 +302,34 @@
         return;
       }
 
-      const temperature = Number(latest.temperature);
-      const vibration = Number(latest.vibration);
-      const pressure = Number(latest.pressure);
-
-      if (![temperature, vibration, pressure].every(Number.isFinite)) {
-        output.textContent = "A temperature, vibration, or pressure value is missing or not numeric.";
-        return;
-      }
-
-      let status = "Healthy";
-      if (temperature >= 58 || vibration >= 1.0 || pressure <= 100) {
-        status = "Critical";
-      } else if (temperature >= 50 || vibration >= 0.7 || pressure <= 110) {
-        status = "Warning";
-      }
+      const type = getMachineType(latest);
+      const result = getStatus(latest, type);
 
       output.replaceChildren();
 
       const title = document.createElement("div");
       title.id = "result";
-      title.textContent = "Demo status: " + status;
+      title.className = result.status;
+      title.textContent = type + " demo status: " + result.status;
 
       const details = document.createElement("p");
       details.textContent = "Latest reading for " + selectedId +
         (latest.timestamp ? " at " + latest.timestamp : "") + ":";
 
       const list = document.createElement("ul");
-      const fields = [
-        ["Temperature", latest.temperature],
-        ["Vibration", latest.vibration],
-        ["Pressure", latest.pressure],
-        ["Flow rate", latest.flow_rate]
-      ];
+      const fields = type === "CNC"
+        ? [
+            ["Spindle temperature", latest.spindle_temperature],
+            ["Vibration", latest.vibration],
+            ["Spindle speed", latest.spindle_speed],
+            ["Tool wear", latest.tool_wear]
+          ]
+        : [
+            ["Temperature", latest.temperature],
+            ["Vibration", latest.vibration],
+            ["Pressure", latest.pressure],
+            ["Flow rate", latest.flow_rate]
+          ];
 
       for (const [label, value] of fields) {
         if (value !== undefined && value !== "") {
