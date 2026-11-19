@@ -12,51 +12,94 @@
       padding: 0 16px;
       color: #222;
     }
-    label { display: block; margin: 16px 0 6px; }
-    select, input, button { font: inherit; padding: 8px; }
+
+    label {
+      display: block;
+      margin: 16px 0 6px;
+    }
+
+    select, input, button {
+      font: inherit;
+      padding: 8px;
+    }
+
     section {
       background: #f2f5f7;
       border-radius: 8px;
       padding: 20px;
       margin-top: 20px;
     }
-    #result { font-size: 1.3rem; font-weight: bold; }
-    .note { color: #555; }
-    .table-wrap { overflow-x: auto; margin-top: 12px; }
-    table { width: 100%; border-collapse: collapse; }
+
+    #result {
+      font-size: 1.3rem;
+      font-weight: bold;
+    }
+
+    .note {
+      color: #555;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      margin-top: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
     th, td {
       border: 1px solid #ccc;
       padding: 8px;
       text-align: left;
       white-space: nowrap;
     }
-    th { background: #e9eef2; }
-    .Healthy { color: #176b2c; font-weight: bold; }
-    .Warning { color: #8a5700; font-weight: bold; }
-    .Critical { color: #a32121; font-weight: bold; }
+
+    th {
+      background: #e9eef2;
+    }
+
+    .Healthy {
+      color: #176b2c;
+      font-weight: bold;
+    }
+
+    .Warning {
+      color: #8a5700;
+      font-weight: bold;
+    }
+
+    .Critical {
+      color: #a32121;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
   <h1>Machine Status Checker</h1>
-  <p>Upload pump, CNC, or compressor readings to view each machine’s latest row.</p>
+  <p>Upload pump, CNC, or compressor readings to view each machine.</p>
   <p class="note">
-    <strong>Demo only:</strong> pump and CNC thresholds are examples, not real machine limits.
-    Compressor status is taken from the uploaded file.
+    <strong>Demo only:</strong> pump and CNC thresholds are examples.
+    Compressor status is taken from the uploaded CSV.
   </p>
 
   <label for="csvFile">Choose one or more data files:</label>
   <input type="file" id="csvFile" accept=".csv,.tsv,.txt" multiple>
 
-  <label for="machineSelect">Choose a machine for details:</label>
+  <label for="machineSelect">Choose a machine:</label>
   <select id="machineSelect" disabled>
-    <option>Upload a data file first</option>
+    <option>Upload data files first</option>
   </select>
 
-  <section id="output" aria-live="polite">Choose a data file to begin.</section>
+  <section id="output" aria-live="polite">
+    Choose a data file to begin.
+  </section>
 
   <section>
     <h2>Machine Status Table</h2>
     <p id="tableMessage">Upload data files to see machine statuses.</p>
+
     <div class="table-wrap">
       <table>
         <thead>
@@ -115,7 +158,8 @@
     }
 
     function getMachineType(row) {
-      const declaredType = (row.machine_type || row.type || "").trim().toLowerCase();
+      const declaredType =
+        (row.machine_type || row.type || "").trim().toLowerCase();
 
       if (
         declaredType.includes("compressor") ||
@@ -160,13 +204,15 @@
           return { status: "Invalid data", error: true };
         }
 
-        // Fictional demo thresholds only; replace with validated machine limits.
+        // Fictional demo thresholds.
         if (temperature >= 65 || vibration >= 1.0 || wear >= 70) {
           return { status: "Critical", error: false };
         }
+
         if (temperature >= 55 || vibration >= 0.7 || wear >= 40) {
           return { status: "Warning", error: false };
         }
+
         return { status: "Healthy", error: false };
       }
 
@@ -177,22 +223,25 @@
         return { status: "Invalid data", error: true };
       }
 
-      // Fictional demo thresholds only; replace with validated machine limits.
+      // Fictional demo thresholds.
       if (temperature >= 58 || vibration >= 1.0 || pressure <= 100) {
         return { status: "Critical", error: false };
       }
+
       if (temperature >= 50 || vibration >= 0.7 || pressure <= 110) {
         return { status: "Warning", error: false };
       }
+
       return { status: "Healthy", error: false };
     }
 
     function latestReadingPerMachine() {
       const latestById = new Map();
 
-      // The last row encountered for each machine is shown.
       for (const row of readings) {
-        latestById.set(row.machine_id, row);
+        if (row.machine_id) {
+          latestById.set(row.machine_id, row);
+        }
       }
 
       return [...latestById.values()];
@@ -202,7 +251,6 @@
       const cell = document.createElement("td");
       cell.textContent = text || "—";
 
-      // Only apply status color classes for the standard statuses.
       if (["Healthy", "Warning", "Critical"].includes(className)) {
         cell.className = className;
       }
@@ -243,12 +291,13 @@
       }
 
       tableMessage.textContent = latestRows.length
-        ? "Showing the last row encountered for each machine."
+        ? "Showing the latest row for each machine."
         : "No machine readings were found.";
     }
 
     fileInput.addEventListener("change", async () => {
       const files = [...fileInput.files];
+
       readings = [];
       machineSelect.replaceChildren();
       machineSelect.disabled = true;
@@ -256,7 +305,8 @@
 
       if (files.length === 0) {
         output.textContent = "Choose one or more data files to begin.";
-        tableMessage.textContent = "Upload data files to see machine statuses.";
+        tableMessage.textContent =
+          "Upload data files to see machine statuses.";
         return;
       }
 
@@ -271,24 +321,30 @@
           const lines = text.split(/\r?\n/);
           const delimiter = lines[0].includes("\t") ? "\t" : ",";
           const headers = splitLine(lines[0], delimiter)
-            .map(header => header.replace(/^\uFEFF/, "").toLowerCase());
+            .map(header =>
+              header.replace(/^\uFEFF/, "").trim().toLowerCase()
+            );
 
           const hasPumpColumns =
             ["machine_id", "temperature", "vibration", "pressure"]
               .every(header => headers.includes(header));
 
           const hasCncColumns =
-            ["machine_id", "spindle_temperature", "vibration", "spindle_speed", "tool_wear"]
+            ["machine_id", "spindle_temperature", "vibration",
+             "spindle_speed", "tool_wear"]
               .every(header => headers.includes(header));
 
           const hasCompressorColumns =
-            ["machine_id", "discharge_pressure", "temperature", "vibration", "running_hours", "status"]
+            ["machine_id", "discharge_pressure", "temperature",
+             "vibration", "running_hours", "status"]
               .every(header => headers.includes(header));
 
           if (!hasPumpColumns && !hasCncColumns && !hasCompressorColumns) {
             throw new Error(
               file.name +
-              " needs pump, CNC, or compressor columns. Compressor files must include machine_id, discharge_pressure, temperature, vibration, running_hours, and status."
+              " has unrecognized columns. The compressor headers must include " +
+              "machine_id, discharge_pressure, temperature, vibration, " +
+              "running_hours, and status."
             );
           }
 
@@ -296,8 +352,12 @@
             .filter(line => line.trim() !== "")
             .map(line => {
               const values = splitLine(line, delimiter);
+
               return Object.fromEntries(
-                headers.map((header, index) => [header, values[index] ?? ""])
+                headers.map((header, index) => [
+                  header,
+                  values[index] ? values[index].trim() : ""
+                ])
               );
             })
             .filter(row => row.machine_id);
@@ -305,10 +365,13 @@
           readings.push(...fileReadings);
         }
 
-        const machineIds = [...new Set(readings.map(row => row.machine_id))];
+        const machineIds = [
+          ...new Set(readings.map(row => row.machine_id))
+        ];
 
         if (machineIds.length === 0) {
-          output.textContent = "No machine readings were found in the selected files.";
+          output.textContent =
+            "No machine readings were found in the selected files.";
           tableMessage.textContent = "No machine readings were found.";
           return;
         }
@@ -334,8 +397,10 @@
 
     function showSelectedMachine() {
       const selectedId = machineSelect.value;
-      const machineReadings = readings.filter(row => row.machine_id === selectedId);
-      const latest = machineReadings[machineReadings.length - 1];
+      const machineReadings =
+        readings.filter(row => row.machine_id === selectedId);
+      const latest =
+        machineReadings[machineReadings.length - 1];
 
       if (!latest) {
         output.textContent = "No reading found for this machine.";
@@ -349,14 +414,20 @@
 
       const title = document.createElement("div");
       title.id = "result";
-      if (["Healthy", "Warning", "Critical"].includes(result.status)) {
+
+      if (
+        ["Healthy", "Warning", "Critical"].includes(result.status)
+      ) {
         title.className = result.status;
       }
+
       title.textContent = type + " status: " + result.status;
 
       const details = document.createElement("p");
-      details.textContent = "Latest reading for " + selectedId +
-        (latest.timestamp ? " at " + latest.timestamp : "") + ":";
+      details.textContent =
+        "Latest reading for " + selectedId +
+        (latest.timestamp ? " at " + latest.timestamp : "") +
+        ":";
 
       const list = document.createElement("ul");
       let fields;
