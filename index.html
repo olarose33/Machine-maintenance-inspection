@@ -23,7 +23,8 @@
       margin: 16px 0 6px;
     }
 
-    select, button {
+    select,
+    button {
       padding: 8px;
       font: inherit;
     }
@@ -32,47 +33,43 @@
       cursor: pointer;
     }
 
-    section, .card {
+    section {
       margin-top: 20px;
       padding: 20px;
       border-radius: 8px;
       background: #f2f5f7;
     }
 
-    .welcome {
-      padding: 28px;
-      border-radius: 10px;
-      background: #f2f5f7;
+    #welcomePage {
+      min-height: 300px;
+      padding: 40px;
     }
 
-    .welcome h1 {
+    #welcomePage h1 {
       margin-top: 0;
     }
 
-    .primary-button {
+    #openAppButton {
+      margin-top: 12px;
+      padding: 12px 18px;
       border: 0;
       border-radius: 6px;
-      padding: 12px 18px;
       background: #176b9a;
       color: white;
       font-weight: bold;
     }
 
-    .primary-button:hover {
-      background: #105579;
-    }
-
-    .secondary-button {
-      margin-bottom: 8px;
-    }
-
-    .note {
-      color: #555;
+    #backButton {
+      margin-bottom: 12px;
     }
 
     #result {
       font-size: 1.3rem;
       font-weight: bold;
+    }
+
+    .note {
+      color: #555;
     }
 
     .table-wrap {
@@ -85,7 +82,8 @@
       border-collapse: collapse;
     }
 
-    th, td {
+    th,
+    td {
       padding: 8px;
       border: 1px solid #ccc;
       text-align: left;
@@ -114,86 +112,83 @@
 </head>
 
 <body>
-  <main>
-    <!-- Opening page -->
-    <section id="homePage" class="welcome">
-      <h1>Machine Status Checker</h1>
-      <p>
-        This app lets you view sample readings for pumps, CNC machines, and
-        compressors. Choose a hosted sample CSV, select a machine, and view
-        its readings and status in a table.
-      </p>
-      <p>
-        Measurements are shown with units, such as °C, mm/s, psi, and RPM.
-        Pump and CNC status labels use example thresholds. Compressor status
-        is read from the sample CSV.
-      </p>
-      <button type="button" id="openAppButton" class="primary-button">
-        Open the data and status page
-      </button>
+  <!-- Opening page -->
+  <section id="welcomePage">
+    <h1>Machine Status Checker</h1>
+    <p>
+      This app displays machine readings and status information for pumps,
+      CNC machines, and compressors.
+    </p>
+    <p>
+      The app uses hosted CSV sample files and shows measurements with units.
+      Pump and CNC statuses use example thresholds, while compressor status
+      comes directly from the compressor CSV.
+    </p>
+    <button type="button" id="openAppButton">
+      Open the data and status page
+    </button>
+  </section>
+
+  <!-- Main app page -->
+  <main id="appPage" hidden>
+    <button type="button" id="backButton">
+      ← Back to welcome page
+    </button>
+
+    <h1>Machine Status Checker</h1>
+    <p>Select a CSV file hosted with this web app.</p>
+    <p class="note">
+      Pump and CNC statuses use fictional demo thresholds.
+      Compressor status is supplied by its CSV.
+    </p>
+
+    <label for="sampleSelect">Choose a sample file:</label>
+    <select id="sampleSelect">
+      <option value="">Choose a sample</option>
+      <option value="pump">Pump sample</option>
+      <option value="cnc">CNC sample</option>
+      <option value="compressor">Compressor sample</option>
+    </select>
+    <button type="button" id="loadSampleButton">Load sample</button>
+
+    <label for="machineSelect">Choose a machine:</label>
+    <select id="machineSelect" disabled>
+      <option>Load a sample first</option>
+    </select>
+
+    <section id="output" aria-live="polite">
+      Choose a sample file to begin.
     </section>
 
-    <!-- Existing data/status page -->
-    <div id="appPage" hidden>
-      <button type="button" id="backButton" class="secondary-button">
-        ← Back to app information
-      </button>
+    <section>
+      <h2>Machine Status Table</h2>
+      <p id="tableMessage">No machine readings loaded.</p>
 
-      <h1>Machine Status Checker</h1>
-      <p>Select a sample CSV hosted with this web app.</p>
-      <p class="note">
-        Pump and CNC statuses use fictional demo thresholds.
-        Compressor status is supplied by its CSV.
-      </p>
-
-      <label for="sampleSelect">Choose a sample file:</label>
-      <select id="sampleSelect">
-        <option value="">Choose a sample</option>
-        <option value="pump">Pump sample</option>
-        <option value="cnc">CNC sample</option>
-        <option value="compressor">Compressor sample</option>
-      </select>
-      <button type="button" id="loadSampleButton">Load sample</button>
-
-      <label for="machineSelect">Choose a machine:</label>
-      <select id="machineSelect" disabled>
-        <option>Load a sample first</option>
-      </select>
-
-      <section id="output" aria-live="polite">
-        Choose a sample file to begin.
-      </section>
-
-      <section>
-        <h2>Machine Status Table</h2>
-        <p id="tableMessage">No machine readings loaded.</p>
-
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Machine ID</th>
-                <th>Type</th>
-                <th>Timestamp</th>
-                <th>Temperature</th>
-                <th>Vibration</th>
-                <th>Pressure</th>
-                <th>Flow rate</th>
-                <th>Spindle speed</th>
-                <th>Tool wear</th>
-                <th>Running hours</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody id="statusTable"></tbody>
-          </table>
-        </div>
-      </section>
-    </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Machine ID</th>
+              <th>Type</th>
+              <th>Timestamp</th>
+              <th>Temperature</th>
+              <th>Vibration</th>
+              <th>Pressure</th>
+              <th>Flow rate</th>
+              <th>Spindle speed</th>
+              <th>Tool wear</th>
+              <th>Running hours</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="statusTable"></tbody>
+        </table>
+      </div>
+    </section>
   </main>
 
   <script>
-    const homePage = document.getElementById("homePage");
+    const welcomePage = document.getElementById("welcomePage");
     const appPage = document.getElementById("appPage");
     const openAppButton = document.getElementById("openAppButton");
     const backButton = document.getElementById("backButton");
@@ -226,13 +221,15 @@
     };
 
     openAppButton.addEventListener("click", () => {
-      homePage.hidden = true;
+      welcomePage.hidden = true;
       appPage.hidden = false;
+      window.scrollTo(0, 0);
     });
 
     backButton.addEventListener("click", () => {
       appPage.hidden = true;
-      homePage.hidden = false;
+      welcomePage.hidden = false;
+      window.scrollTo(0, 0);
     });
 
     function splitLine(line, delimiter) {
@@ -316,8 +313,7 @@
 
     function getStatus(row, type) {
       if (type === "Compressor") {
-        const suppliedStatus = (row.status || "").trim();
-        return suppliedStatus || "Status missing";
+        return (row.status || "").trim() || "Status missing";
       }
 
       const vibration = Number(row.vibration);
@@ -371,9 +367,9 @@
         return "—";
       }
 
-      const customUnit = row[`${field}_unit`];
-      const unit = customUnit && customUnit.trim()
-        ? customUnit.trim()
+      const unitColumn = row[`${field}_unit`];
+      const unit = unitColumn && unitColumn.trim()
+        ? unitColumn.trim()
         : (defaultUnits[field] || "");
 
       return unit ? `${value} ${unit}` : String(value);
@@ -489,9 +485,11 @@
 
       const title = document.createElement("div");
       title.id = "result";
+
       if (["Healthy", "Warning", "Critical"].includes(status)) {
         title.className = status;
       }
+
       title.textContent = `${type} status: ${status}`;
 
       const details = document.createElement("p");
