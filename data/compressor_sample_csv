@@ -1,2 +1,4 @@
 machine_id,machine_type,timestamp,discharge_pressure,temperature,vibration,running_hours,status
-CMP001,Compressor,2026-11-19 08:00,100,55,0.5,3200,
+CMP001,Compressor,2026-11-19 08:00,100,55,0.5,3200,Healthy
+CMP002,Compressor,2026-11-19 08:05,125,68,0.8,4800,Warning
+CMP003,Compressor,2026-11-19 08:10,145,82,1.2,7200,Critical
