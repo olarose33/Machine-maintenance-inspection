@@ -7,10 +7,10 @@
 
   <style>
     body {
-      font-family: Arial, sans-serif;
       max-width: 1100px;
       margin: 40px auto;
       padding: 0 16px;
+      font-family: Arial, sans-serif;
       color: #222;
     }
 
@@ -20,8 +20,8 @@
     }
 
     select, button {
-      font: inherit;
       padding: 8px;
+      font: inherit;
     }
 
     button {
@@ -29,10 +29,10 @@
     }
 
     section {
-      background: #f2f5f7;
-      border-radius: 8px;
-      padding: 20px;
       margin-top: 20px;
+      padding: 20px;
+      border-radius: 8px;
+      background: #f2f5f7;
     }
 
     #result {
@@ -55,10 +55,10 @@
     }
 
     th, td {
-      border: 1px solid #ccc;
       padding: 8px;
+      border: 1px solid #ccc;
       text-align: left;
-      white-space: normal;
+      white-space: nowrap;
     }
 
     th {
@@ -84,12 +84,7 @@
 
 <body>
   <h1>Machine Status Checker</h1>
-  <p>Select a sample CSV hosted with this web app.</p>
-  <p class="note">
-    Pump and CNC statuses use fictional demo thresholds.
-    Compressor status is supplied by its CSV.
-    Add unit columns to your CSV to specify different units.
-  </p>
+  <p>Select a CSV file hosted with this web app.</p>
 
   <label for="sampleSelect">Choose a sample file:</label>
   <select id="sampleSelect">
@@ -153,6 +148,7 @@
 
     const defaultUnits = {
       temperature: "°C",
+      spindle_temperature: "°C",
       vibration: "mm/s",
       pressure: "psi",
       discharge_pressure: "psi",
@@ -257,18 +253,18 @@
 
       if (type === "CNC") {
         const temperature = Number(row.spindle_temperature);
-        const wear = Number(row.tool_wear);
+        const spindleSpeed = Number(row.spindle_speed);
+        const toolWear = Number(row.tool_wear);
 
-        if (![temperature, Number(row.spindle_speed), wear]
-          .every(Number.isFinite)) {
+        if (![temperature, spindleSpeed, toolWear].every(Number.isFinite)) {
           return { status: "Invalid data" };
         }
 
-        if (temperature >= 65 || vibration >= 1.0 || wear >= 70) {
+        if (temperature >= 65 || vibration >= 1.0 || toolWear >= 70) {
           return { status: "Critical" };
         }
 
-        if (temperature >= 55 || vibration >= 0.7 || wear >= 40) {
+        if (temperature >= 55 || vibration >= 0.7 || toolWear >= 40) {
           return { status: "Warning" };
         }
 
@@ -293,26 +289,25 @@
       return { status: "Healthy" };
     }
 
-    function valueWithUnit(value, unit) {
+    function getUnit(row, field) {
+      const unitColumn = `${field}_unit`;
+
+      if (row[unitColumn] && row[unitColumn].trim()) {
+        return row[unitColumn].trim();
+      }
+
+      return defaultUnits[field] || "";
+    }
+
+    function valueWithUnit(row, field) {
+      const value = row[field];
+
       if (value === undefined || value === null || value === "") {
         return "—";
       }
 
+      const unit = getUnit(row, field);
       return unit ? `${value} ${unit}` : String(value);
-    }
-
-    function getUnit(row, field, fallbackField = field) {
-      return row[`${field}_unit`] ||
-        row[`${fallbackField}_unit`] ||
-        defaultUnits[fallbackField] ||
-        "";
-    }
-
-    function getMeasurement(row, field, unitField = field) {
-      return valueWithUnit(
-        row[field],
-        getUnit(row, field, unitField)
-      );
     }
 
     function latestReadingPerMachine() {
@@ -347,35 +342,32 @@
         const result = getStatus(row, type);
         const tableRow = document.createElement("tr");
 
-        let temperature = "";
-        let pressure = "";
-        let flowRate = "";
-        let spindleSpeed = "";
-        let toolWear = "";
-        let runningHours = "";
+        let temperature = "—";
+        let pressure = "—";
+        let flowRate = "—";
+        let spindleSpeed = "—";
+        let toolWear = "—";
+        let runningHours = "—";
 
         if (type === "CNC") {
-          temperature = getMeasurement(row, "spindle_temperature", "temperature");
-          spindleSpeed = getMeasurement(row, "spindle_speed");
-          toolWear = getMeasurement(row, "tool_wear");
+          temperature = valueWithUnit(row, "spindle_temperature");
+          spindleSpeed = valueWithUnit(row, "spindle_speed");
+          toolWear = valueWithUnit(row, "tool_wear");
         } else if (type === "Compressor") {
-          temperature = getMeasurement(row, "temperature");
-          pressure = getMeasurement(row, "discharge_pressure", "pressure");
-          runningHours = getMeasurement(row, "running_hours");
+          temperature = valueWithUnit(row, "temperature");
+          pressure = valueWithUnit(row, "discharge_pressure");
+          runningHours = valueWithUnit(row, "running_hours");
         } else {
-          temperature = getMeasurement(row, "temperature");
-          pressure = getMeasurement(row, "pressure");
-          flowRate = getMeasurement(row, "flow_rate");
+          temperature = valueWithUnit(row, "temperature");
+          pressure = valueWithUnit(row, "pressure");
+          flowRate = valueWithUnit(row, "flow_rate");
         }
 
         addCell(tableRow, row.machine_id);
         addCell(tableRow, type);
         addCell(tableRow, row.timestamp);
         addCell(tableRow, temperature);
-        addCell(
-          tableRow,
-          getMeasurement(row, "vibration")
-        );
+        addCell(tableRow, valueWithUnit(row, "vibration"));
         addCell(tableRow, pressure);
         addCell(tableRow, flowRate);
         addCell(tableRow, spindleSpeed);
@@ -398,18 +390,13 @@
         [...new Set(readings.map(row => row.machine_id).filter(Boolean))];
 
       if (machineIds.length === 0) {
-        const option = document.createElement("option");
-        option.textContent = "No machines found";
-        machineSelect.appendChild(option);
+        machineSelect.add(new Option("No machines found", ""));
         machineSelect.disabled = true;
         return;
       }
 
       for (const id of machineIds) {
-        const option = document.createElement("option");
-        option.value = id;
-        option.textContent = id;
-        machineSelect.appendChild(option);
+        machineSelect.add(new Option(id, id));
       }
 
       machineSelect.disabled = false;
@@ -433,9 +420,11 @@
 
       const title = document.createElement("div");
       title.id = "result";
+
       if (["Healthy", "Warning", "Critical"].includes(result.status)) {
         title.className = result.status;
       }
+
       title.textContent = `${type} status: ${result.status}`;
 
       const details = document.createElement("p");
@@ -450,26 +439,26 @@
       if (type === "CNC") {
         fields = [
           ["Spindle temperature",
-            getMeasurement(latest, "spindle_temperature", "temperature")],
-          ["Vibration", getMeasurement(latest, "vibration")],
-          ["Spindle speed", getMeasurement(latest, "spindle_speed")],
-          ["Tool wear", getMeasurement(latest, "tool_wear")]
+            valueWithUnit(latest, "spindle_temperature")],
+          ["Vibration", valueWithUnit(latest, "vibration")],
+          ["Spindle speed", valueWithUnit(latest, "spindle_speed")],
+          ["Tool wear", valueWithUnit(latest, "tool_wear")]
         ];
       } else if (type === "Compressor") {
         fields = [
           ["Discharge pressure",
-            getMeasurement(latest, "discharge_pressure", "pressure")],
-          ["Temperature", getMeasurement(latest, "temperature")],
-          ["Vibration", getMeasurement(latest, "vibration")],
-          ["Running hours", getMeasurement(latest, "running_hours")],
+            valueWithUnit(latest, "discharge_pressure")],
+          ["Temperature", valueWithUnit(latest, "temperature")],
+          ["Vibration", valueWithUnit(latest, "vibration")],
+          ["Running hours", valueWithUnit(latest, "running_hours")],
           ["Supplied status", latest.status || "—"]
         ];
       } else {
         fields = [
-          ["Temperature", getMeasurement(latest, "temperature")],
-          ["Vibration", getMeasurement(latest, "vibration")],
-          ["Pressure", getMeasurement(latest, "pressure")],
-          ["Flow rate", getMeasurement(latest, "flow_rate")]
+          ["Temperature", valueWithUnit(latest, "temperature")],
+          ["Vibration", valueWithUnit(latest, "vibration")],
+          ["Pressure", valueWithUnit(latest, "pressure")],
+          ["Flow rate", valueWithUnit(latest, "flow_rate")]
         ];
       }
 
