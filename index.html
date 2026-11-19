@@ -7,7 +7,7 @@
   <style>
     body {
       font-family: Arial, sans-serif;
-      max-width: 1000px;
+      max-width: 1100px;
       margin: 40px auto;
       padding: 0 16px;
       color: #222;
@@ -38,11 +38,15 @@
 </head>
 <body>
   <h1>Machine Status Checker</h1>
-  <p>Upload pump or CNC readings to view each machine’s latest row in a status table.</p>
-  <p class="note"><strong>Demo only:</strong> example thresholds are not real machine limits or maintenance advice.</p>
+  <p>Upload pump, CNC, or compressor readings to view each machine’s latest row.</p>
+  <p class="note">
+    <strong>Demo only:</strong> pump and CNC thresholds are examples, not real machine limits.
+    Compressor status is taken from the uploaded file.
+  </p>
 
-  <label for="csvFile">Choose your data file:</label>
-<input type="file" id="csvFile" accept=".csv,.tsv,.txt" multiple>
+  <label for="csvFile">Choose one or more data files:</label>
+  <input type="file" id="csvFile" accept=".csv,.tsv,.txt" multiple>
+
   <label for="machineSelect">Choose a machine for details:</label>
   <select id="machineSelect" disabled>
     <option>Upload a data file first</option>
@@ -52,7 +56,7 @@
 
   <section>
     <h2>Machine Status Table</h2>
-    <p id="tableMessage">Upload a data file to see machine statuses.</p>
+    <p id="tableMessage">Upload data files to see machine statuses.</p>
     <div class="table-wrap">
       <table>
         <thead>
@@ -65,7 +69,8 @@
             <th>Pressure</th>
             <th>Spindle speed</th>
             <th>Tool wear</th>
-            <th>Demo status</th>
+            <th>Running hours</th>
+            <th>Status</th>
           </tr>
         </thead>
         <tbody id="statusTable"></tbody>
@@ -110,7 +115,15 @@
     }
 
     function getMachineType(row) {
-      const declaredType = (row.machine_type || row.type || "").toLowerCase();
+      const declaredType = (row.machine_type || row.type || "").trim().toLowerCase();
+
+      if (
+        declaredType.includes("compressor") ||
+        row.discharge_pressure !== undefined ||
+        row.running_hours !== undefined
+      ) {
+        return "Compressor";
+      }
 
       if (
         declaredType.includes("cnc") ||
@@ -125,6 +138,13 @@
     }
 
     function getStatus(row, type) {
+      if (type === "Compressor") {
+        const suppliedStatus = (row.status || "").trim();
+        return suppliedStatus
+          ? { status: suppliedStatus, error: false }
+          : { status: "Status missing", error: true };
+      }
+
       const vibration = Number(row.vibration);
 
       if (!Number.isFinite(vibration)) {
@@ -170,7 +190,7 @@
     function latestReadingPerMachine() {
       const latestById = new Map();
 
-      // The last row for each machine in the uploaded file is treated as latest.
+      // The last row encountered for each machine is shown.
       for (const row of readings) {
         latestById.set(row.machine_id, row);
       }
@@ -181,7 +201,12 @@
     function addCell(rowElement, text, className = "") {
       const cell = document.createElement("td");
       cell.textContent = text || "—";
-      if (className) cell.className = className;
+
+      // Only apply status color classes for the standard statuses.
+      if (["Healthy", "Warning", "Critical"].includes(className)) {
+        cell.className = className;
+      }
+
       rowElement.appendChild(cell);
     }
 
@@ -194,101 +219,116 @@
         const result = getStatus(row, type);
         const tableRow = document.createElement("tr");
 
+        let temperature = row.temperature;
+        let pressure = row.pressure;
+
+        if (type === "CNC") {
+          temperature = row.spindle_temperature;
+        } else if (type === "Compressor") {
+          pressure = row.discharge_pressure;
+        }
+
         addCell(tableRow, row.machine_id);
         addCell(tableRow, type);
         addCell(tableRow, row.timestamp);
-        addCell(tableRow, type === "CNC" ? row.spindle_temperature : row.temperature);
+        addCell(tableRow, temperature);
         addCell(tableRow, row.vibration);
-        addCell(tableRow, row.pressure);
+        addCell(tableRow, pressure);
         addCell(tableRow, row.spindle_speed);
         addCell(tableRow, row.tool_wear);
+        addCell(tableRow, row.running_hours);
         addCell(tableRow, result.status, result.status);
 
         statusTable.appendChild(tableRow);
       }
 
       tableMessage.textContent = latestRows.length
-        ? "Showing the last row in the file for each machine."
+        ? "Showing the last row encountered for each machine."
         : "No machine readings were found.";
     }
 
     fileInput.addEventListener("change", async () => {
-  const files = [...fileInput.files];
-  readings = [];
-  machineSelect.replaceChildren();
-  machineSelect.disabled = true;
-  statusTable.replaceChildren();
+      const files = [...fileInput.files];
+      readings = [];
+      machineSelect.replaceChildren();
+      machineSelect.disabled = true;
+      statusTable.replaceChildren();
 
-  if (files.length === 0) {
-    output.textContent = "Choose one or more data files to begin.";
-    tableMessage.textContent = "Upload data files to see machine statuses.";
-    return;
-  }
-
-  try {
-    for (const file of files) {
-      const text = (await file.text()).trim();
-
-      if (!text) {
-        throw new Error(file.name + " is empty.");
+      if (files.length === 0) {
+        output.textContent = "Choose one or more data files to begin.";
+        tableMessage.textContent = "Upload data files to see machine statuses.";
+        return;
       }
 
-      const lines = text.split(/\r?\n/);
-      const delimiter = lines[0].includes("\t") ? "\t" : ",";
-      const headers = splitLine(lines[0], delimiter)
-        .map(header => header.replace(/^\uFEFF/, "").toLowerCase());
+      try {
+        for (const file of files) {
+          const text = (await file.text()).trim();
 
-      const hasPumpColumns =
-        ["machine_id", "temperature", "vibration", "pressure"]
-          .every(header => headers.includes(header));
+          if (!text) {
+            throw new Error(file.name + " is empty.");
+          }
 
-      const hasCncColumns =
-        ["machine_id", "spindle_temperature", "vibration", "spindle_speed", "tool_wear"]
-          .every(header => headers.includes(header));
+          const lines = text.split(/\r?\n/);
+          const delimiter = lines[0].includes("\t") ? "\t" : ",";
+          const headers = splitLine(lines[0], delimiter)
+            .map(header => header.replace(/^\uFEFF/, "").toLowerCase());
 
-      if (!hasPumpColumns && !hasCncColumns) {
-        throw new Error(
-          file.name + " has unrecognized columns. Check that it has machine_id and the required pump or CNC columns."
-        );
+          const hasPumpColumns =
+            ["machine_id", "temperature", "vibration", "pressure"]
+              .every(header => headers.includes(header));
+
+          const hasCncColumns =
+            ["machine_id", "spindle_temperature", "vibration", "spindle_speed", "tool_wear"]
+              .every(header => headers.includes(header));
+
+          const hasCompressorColumns =
+            ["machine_id", "discharge_pressure", "temperature", "vibration", "running_hours", "status"]
+              .every(header => headers.includes(header));
+
+          if (!hasPumpColumns && !hasCncColumns && !hasCompressorColumns) {
+            throw new Error(
+              file.name +
+              " needs pump, CNC, or compressor columns. Compressor files must include machine_id, discharge_pressure, temperature, vibration, running_hours, and status."
+            );
+          }
+
+          const fileReadings = lines.slice(1)
+            .filter(line => line.trim() !== "")
+            .map(line => {
+              const values = splitLine(line, delimiter);
+              return Object.fromEntries(
+                headers.map((header, index) => [header, values[index] ?? ""])
+              );
+            })
+            .filter(row => row.machine_id);
+
+          readings.push(...fileReadings);
+        }
+
+        const machineIds = [...new Set(readings.map(row => row.machine_id))];
+
+        if (machineIds.length === 0) {
+          output.textContent = "No machine readings were found in the selected files.";
+          tableMessage.textContent = "No machine readings were found.";
+          return;
+        }
+
+        for (const id of machineIds) {
+          const option = document.createElement("option");
+          option.value = id;
+          option.textContent = id;
+          machineSelect.appendChild(option);
+        }
+
+        machineSelect.disabled = false;
+        renderTable();
+        showSelectedMachine();
+      } catch (error) {
+        readings = [];
+        output.textContent = error.message;
+        tableMessage.textContent = "Could not load the selected files.";
       }
-
-      const fileReadings = lines.slice(1)
-        .filter(line => line.trim() !== "")
-        .map(line => {
-          const values = splitLine(line, delimiter);
-          return Object.fromEntries(
-            headers.map((header, index) => [header, values[index] ?? ""])
-          );
-        })
-        .filter(row => row.machine_id);
-
-      readings.push(...fileReadings);
-    }
-
-    const machineIds = [...new Set(readings.map(row => row.machine_id))];
-
-    if (machineIds.length === 0) {
-      output.textContent = "No machine readings were found in the selected files.";
-      tableMessage.textContent = "No machine readings were found.";
-      return;
-    }
-
-    for (const id of machineIds) {
-      const option = document.createElement("option");
-      option.value = id;
-      option.textContent = id;
-      machineSelect.appendChild(option);
-    }
-
-    machineSelect.disabled = false;
-    renderTable();
-    showSelectedMachine();
-  } catch (error) {
-    readings = [];
-    output.textContent = error.message;
-    tableMessage.textContent = "Could not load the selected files.";
-  }
-});
+    });
 
     machineSelect.addEventListener("change", showSelectedMachine);
 
@@ -309,27 +349,41 @@
 
       const title = document.createElement("div");
       title.id = "result";
-      title.className = result.status;
-      title.textContent = type + " demo status: " + result.status;
+      if (["Healthy", "Warning", "Critical"].includes(result.status)) {
+        title.className = result.status;
+      }
+      title.textContent = type + " status: " + result.status;
 
       const details = document.createElement("p");
       details.textContent = "Latest reading for " + selectedId +
         (latest.timestamp ? " at " + latest.timestamp : "") + ":";
 
       const list = document.createElement("ul");
-      const fields = type === "CNC"
-        ? [
-            ["Spindle temperature", latest.spindle_temperature],
-            ["Vibration", latest.vibration],
-            ["Spindle speed", latest.spindle_speed],
-            ["Tool wear", latest.tool_wear]
-          ]
-        : [
-            ["Temperature", latest.temperature],
-            ["Vibration", latest.vibration],
-            ["Pressure", latest.pressure],
-            ["Flow rate", latest.flow_rate]
-          ];
+      let fields;
+
+      if (type === "CNC") {
+        fields = [
+          ["Spindle temperature", latest.spindle_temperature],
+          ["Vibration", latest.vibration],
+          ["Spindle speed", latest.spindle_speed],
+          ["Tool wear", latest.tool_wear]
+        ];
+      } else if (type === "Compressor") {
+        fields = [
+          ["Discharge pressure", latest.discharge_pressure],
+          ["Temperature", latest.temperature],
+          ["Vibration", latest.vibration],
+          ["Running hours", latest.running_hours],
+          ["Supplied status", latest.status]
+        ];
+      } else {
+        fields = [
+          ["Temperature", latest.temperature],
+          ["Vibration", latest.vibration],
+          ["Pressure", latest.pressure],
+          ["Flow rate", latest.flow_rate]
+        ];
+      }
 
       for (const [label, value] of fields) {
         if (value !== undefined && value !== "") {
