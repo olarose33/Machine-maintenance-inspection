@@ -19,14 +19,12 @@
       margin: 16px 0 6px;
     }
 
-    select {
+    select, button {
       font: inherit;
       padding: 8px;
     }
 
     button {
-      font: inherit;
-      padding: 8px;
       margin-left: 6px;
     }
 
@@ -60,7 +58,7 @@
       border: 1px solid #ccc;
       padding: 8px;
       text-align: left;
-      white-space: nowrap;
+      white-space: normal;
     }
 
     th {
@@ -86,10 +84,11 @@
 
 <body>
   <h1>Machine Status Checker</h1>
-  <p>Select one of the CSV files hosted with this web app.</p>
+  <p>Select a sample CSV hosted with this web app.</p>
   <p class="note">
     Pump and CNC statuses use fictional demo thresholds.
-    Compressor status is supplied by the CSV.
+    Compressor status is supplied by its CSV.
+    Add unit columns to your CSV to specify different units.
   </p>
 
   <label for="sampleSelect">Choose a sample file:</label>
@@ -124,6 +123,7 @@
             <th>Temperature</th>
             <th>Vibration</th>
             <th>Pressure</th>
+            <th>Flow rate</th>
             <th>Spindle speed</th>
             <th>Tool wear</th>
             <th>Running hours</th>
@@ -151,6 +151,17 @@
       compressor: "samples/compressor.csv"
     };
 
+    const defaultUnits = {
+      temperature: "°C",
+      vibration: "mm/s",
+      pressure: "psi",
+      discharge_pressure: "psi",
+      flow_rate: "L/min",
+      spindle_speed: "RPM",
+      tool_wear: "%",
+      running_hours: "hours"
+    };
+
     function splitLine(line, delimiter) {
       const fields = [];
       let value = "";
@@ -176,6 +187,34 @@
 
       fields.push(value.trim());
       return fields;
+    }
+
+    function parseCsv(text) {
+      const lines = text.trim().split(/\r?\n/);
+
+      if (lines.length < 2) {
+        throw new Error("The selected CSV has no data rows.");
+      }
+
+      const delimiter = lines[0].includes("\t") ? "\t" : ",";
+      const headers = splitLine(lines[0], delimiter)
+        .map(header => header.replace(/^\uFEFF/, "").trim().toLowerCase());
+
+      const rows = lines.slice(1)
+        .filter(line => line.trim() !== "")
+        .map(line => {
+          const values = splitLine(line, delimiter);
+
+          return Object.fromEntries(
+            headers.map((header, index) => [
+              header,
+              values[index] ? values[index].trim() : ""
+            ])
+          );
+        })
+        .filter(row => row.machine_id);
+
+      return { headers, rows };
     }
 
     function getMachineType(row) {
@@ -206,52 +245,74 @@
       if (type === "Compressor") {
         const suppliedStatus = (row.status || "").trim();
         return suppliedStatus
-          ? { status: suppliedStatus, error: false }
-          : { status: "Status missing", error: true };
+          ? { status: suppliedStatus }
+          : { status: "Status missing" };
       }
 
       const vibration = Number(row.vibration);
 
       if (!Number.isFinite(vibration)) {
-        return { status: "Invalid data", error: true };
+        return { status: "Invalid data" };
       }
 
       if (type === "CNC") {
         const temperature = Number(row.spindle_temperature);
-        const speed = Number(row.spindle_speed);
         const wear = Number(row.tool_wear);
 
-        if (![temperature, speed, wear].every(Number.isFinite)) {
-          return { status: "Invalid data", error: true };
+        if (![temperature, Number(row.spindle_speed), wear]
+          .every(Number.isFinite)) {
+          return { status: "Invalid data" };
         }
 
         if (temperature >= 65 || vibration >= 1.0 || wear >= 70) {
-          return { status: "Critical", error: false };
+          return { status: "Critical" };
         }
 
         if (temperature >= 55 || vibration >= 0.7 || wear >= 40) {
-          return { status: "Warning", error: false };
+          return { status: "Warning" };
         }
 
-        return { status: "Healthy", error: false };
+        return { status: "Healthy" };
       }
 
       const temperature = Number(row.temperature);
       const pressure = Number(row.pressure);
 
       if (![temperature, pressure].every(Number.isFinite)) {
-        return { status: "Invalid data", error: true };
+        return { status: "Invalid data" };
       }
 
       if (temperature >= 58 || vibration >= 1.0 || pressure <= 100) {
-        return { status: "Critical", error: false };
+        return { status: "Critical" };
       }
 
       if (temperature >= 50 || vibration >= 0.7 || pressure <= 110) {
-        return { status: "Warning", error: false };
+        return { status: "Warning" };
       }
 
-      return { status: "Healthy", error: false };
+      return { status: "Healthy" };
+    }
+
+    function valueWithUnit(value, unit) {
+      if (value === undefined || value === null || value === "") {
+        return "—";
+      }
+
+      return unit ? `${value} ${unit}` : String(value);
+    }
+
+    function getUnit(row, field, fallbackField = field) {
+      return row[`${field}_unit`] ||
+        row[`${fallbackField}_unit`] ||
+        defaultUnits[fallbackField] ||
+        "";
+    }
+
+    function getMeasurement(row, field, unitField = field) {
+      return valueWithUnit(
+        row[field],
+        getUnit(row, field, unitField)
+      );
     }
 
     function latestReadingPerMachine() {
@@ -286,24 +347,40 @@
         const result = getStatus(row, type);
         const tableRow = document.createElement("tr");
 
-        let temperature = row.temperature;
-        let pressure = row.pressure;
+        let temperature = "";
+        let pressure = "";
+        let flowRate = "";
+        let spindleSpeed = "";
+        let toolWear = "";
+        let runningHours = "";
 
         if (type === "CNC") {
-          temperature = row.spindle_temperature;
+          temperature = getMeasurement(row, "spindle_temperature", "temperature");
+          spindleSpeed = getMeasurement(row, "spindle_speed");
+          toolWear = getMeasurement(row, "tool_wear");
         } else if (type === "Compressor") {
-          pressure = row.discharge_pressure;
+          temperature = getMeasurement(row, "temperature");
+          pressure = getMeasurement(row, "discharge_pressure", "pressure");
+          runningHours = getMeasurement(row, "running_hours");
+        } else {
+          temperature = getMeasurement(row, "temperature");
+          pressure = getMeasurement(row, "pressure");
+          flowRate = getMeasurement(row, "flow_rate");
         }
 
         addCell(tableRow, row.machine_id);
         addCell(tableRow, type);
         addCell(tableRow, row.timestamp);
         addCell(tableRow, temperature);
-        addCell(tableRow, row.vibration);
+        addCell(
+          tableRow,
+          getMeasurement(row, "vibration")
+        );
         addCell(tableRow, pressure);
-        addCell(tableRow, row.spindle_speed);
-        addCell(tableRow, row.tool_wear);
-        addCell(tableRow, row.running_hours);
+        addCell(tableRow, flowRate);
+        addCell(tableRow, spindleSpeed);
+        addCell(tableRow, toolWear);
+        addCell(tableRow, runningHours);
         addCell(tableRow, result.status, result.status);
 
         statusTable.appendChild(tableRow);
@@ -338,93 +415,6 @@
       machineSelect.disabled = false;
     }
 
-    loadSampleButton.addEventListener("click", async () => {
-      const sampleName = sampleSelect.value;
-      const path = sampleFilePaths[sampleName];
-
-      if (!path) {
-        output.textContent = "Choose a sample file first.";
-        return;
-      }
-
-      try {
-        const url = new URL(path, document.baseURI);
-        const response = await fetch(url);
-
-        if (!response.ok) {
-          throw new Error(
-            `Could not load ${path} (HTTP ${response.status}).`
-          );
-        }
-
-        const text = (await response.text()).trim();
-
-        if (!text) {
-          throw new Error(path + " is empty.");
-        }
-
-        const lines = text.split(/\r?\n/);
-        const delimiter = lines[0].includes("\t") ? "\t" : ",";
-        const headers = splitLine(lines[0], delimiter)
-          .map(header =>
-            header.replace(/^\uFEFF/, "").trim().toLowerCase()
-          );
-
-        const hasPumpColumns =
-          ["machine_id", "temperature", "vibration", "pressure"]
-            .every(header => headers.includes(header));
-
-        const hasCncColumns =
-          ["machine_id", "spindle_temperature", "vibration",
-           "spindle_speed", "tool_wear"]
-            .every(header => headers.includes(header));
-
-        const hasCompressorColumns =
-          ["machine_id", "discharge_pressure", "temperature",
-           "vibration", "running_hours", "status"]
-            .every(header => headers.includes(header));
-
-        if (!(hasPumpColumns || hasCncColumns || hasCompressorColumns)) {
-          throw new Error(
-            path +
-            " must contain columns for a pump, CNC machine, or compressor."
-          );
-        }
-
-        readings = lines.slice(1)
-          .filter(line => line.trim() !== "")
-          .map(line => {
-            const values = splitLine(line, delimiter);
-
-            return Object.fromEntries(
-              headers.map((header, index) => [
-                header,
-                values[index] ? values[index].trim() : ""
-              ])
-            );
-          })
-          .filter(row => row.machine_id);
-
-        if (readings.length === 0) {
-          throw new Error("The selected sample file has no machine readings.");
-        }
-
-        fillMachineSelector();
-        renderTable();
-        showSelectedMachine();
-      } catch (error) {
-        readings = [];
-        fillMachineSelector();
-        statusTable.replaceChildren();
-        tableMessage.textContent = "Could not load the sample file.";
-        output.textContent =
-          error.message +
-          " Check that the file is deployed inside the samples folder.";
-      }
-    });
-
-    machineSelect.addEventListener("change", showSelectedMachine);
-
     function showSelectedMachine() {
       const selectedId = machineSelect.value;
       const latest = readings
@@ -443,17 +433,15 @@
 
       const title = document.createElement("div");
       title.id = "result";
-
       if (["Healthy", "Warning", "Critical"].includes(result.status)) {
         title.className = result.status;
       }
-
-      title.textContent = type + " status: " + result.status;
+      title.textContent = `${type} status: ${result.status}`;
 
       const details = document.createElement("p");
       details.textContent =
-        "Latest reading for " + selectedId +
-        (latest.timestamp ? " at " + latest.timestamp : "") +
+        `Latest reading for ${selectedId}` +
+        (latest.timestamp ? ` at ${latest.timestamp}` : "") +
         ":";
 
       const list = document.createElement("ul");
@@ -461,38 +449,102 @@
 
       if (type === "CNC") {
         fields = [
-          ["Spindle temperature", latest.spindle_temperature],
-          ["Vibration", latest.vibration],
-          ["Spindle speed", latest.spindle_speed],
-          ["Tool wear", latest.tool_wear]
+          ["Spindle temperature",
+            getMeasurement(latest, "spindle_temperature", "temperature")],
+          ["Vibration", getMeasurement(latest, "vibration")],
+          ["Spindle speed", getMeasurement(latest, "spindle_speed")],
+          ["Tool wear", getMeasurement(latest, "tool_wear")]
         ];
       } else if (type === "Compressor") {
         fields = [
-          ["Discharge pressure", latest.discharge_pressure],
-          ["Temperature", latest.temperature],
-          ["Vibration", latest.vibration],
-          ["Running hours", latest.running_hours],
-          ["Supplied status", latest.status]
+          ["Discharge pressure",
+            getMeasurement(latest, "discharge_pressure", "pressure")],
+          ["Temperature", getMeasurement(latest, "temperature")],
+          ["Vibration", getMeasurement(latest, "vibration")],
+          ["Running hours", getMeasurement(latest, "running_hours")],
+          ["Supplied status", latest.status || "—"]
         ];
       } else {
         fields = [
-          ["Temperature", latest.temperature],
-          ["Vibration", latest.vibration],
-          ["Pressure", latest.pressure],
-          ["Flow rate", latest.flow_rate]
+          ["Temperature", getMeasurement(latest, "temperature")],
+          ["Vibration", getMeasurement(latest, "vibration")],
+          ["Pressure", getMeasurement(latest, "pressure")],
+          ["Flow rate", getMeasurement(latest, "flow_rate")]
         ];
       }
 
       for (const [label, value] of fields) {
-        if (value !== undefined && value !== "") {
-          const item = document.createElement("li");
-          item.textContent = label + ": " + value;
-          list.appendChild(item);
-        }
+        const item = document.createElement("li");
+        item.textContent = `${label}: ${value}`;
+        list.appendChild(item);
       }
 
       output.append(title, details, list);
     }
+
+    loadSampleButton.addEventListener("click", async () => {
+      const path = sampleFilePaths[sampleSelect.value];
+
+      if (!path) {
+        output.textContent = "Choose a sample file first.";
+        return;
+      }
+
+      loadSampleButton.disabled = true;
+      output.textContent = "Loading sample…";
+
+      try {
+        const response = await fetch(new URL(path, document.baseURI));
+
+        if (!response.ok) {
+          throw new Error(
+            `Could not load ${path} (HTTP ${response.status}).`
+          );
+        }
+
+        const { headers, rows } = parseCsv(await response.text());
+
+        const hasPumpColumns =
+          ["machine_id", "temperature", "vibration", "pressure"]
+            .every(header => headers.includes(header));
+
+        const hasCncColumns =
+          ["machine_id", "spindle_temperature", "vibration",
+            "spindle_speed", "tool_wear"]
+            .every(header => headers.includes(header));
+
+        const hasCompressorColumns =
+          ["machine_id", "discharge_pressure", "temperature",
+            "vibration", "running_hours", "status"]
+            .every(header => headers.includes(header));
+
+        if (!(hasPumpColumns || hasCncColumns || hasCompressorColumns)) {
+          throw new Error(
+            "The CSV headers do not match a pump, CNC, or compressor sample."
+          );
+        }
+
+        if (rows.length === 0) {
+          throw new Error("The selected sample file has no machine readings.");
+        }
+
+        readings = rows;
+        fillMachineSelector();
+        renderTable();
+        showSelectedMachine();
+      } catch (error) {
+        readings = [];
+        fillMachineSelector();
+        statusTable.replaceChildren();
+        tableMessage.textContent = "Could not load the sample file.";
+        output.textContent =
+          `${error.message} Check that the CSV is deployed in the samples folder.`;
+      } finally {
+        loadSampleButton.disabled = false;
+      }
+    });
+
+    machineSelect.addEventListener("change", showSelectedMachine);
   </script>
 </body>
 </html>
