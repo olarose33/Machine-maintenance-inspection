@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Machine Status Checker</title>
+
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -18,9 +19,15 @@
       margin: 16px 0 6px;
     }
 
-    select, input, button {
+    select {
       font: inherit;
       padding: 8px;
+    }
+
+    button {
+      font: inherit;
+      padding: 8px;
+      margin-left: 6px;
     }
 
     section {
@@ -76,29 +83,36 @@
     }
   </style>
 </head>
+
 <body>
   <h1>Machine Status Checker</h1>
-  <p>Upload pump, CNC, or compressor readings to view each machine.</p>
+  <p>Select one of the CSV files hosted with this web app.</p>
   <p class="note">
-    <strong>Demo only:</strong> pump and CNC thresholds are examples.
-    Compressor status is taken from the uploaded CSV.
+    Pump and CNC statuses use fictional demo thresholds.
+    Compressor status is supplied by the CSV.
   </p>
 
-  <label for="csvFile">Choose one or more data files:</label>
-  <input type="file" id="csvFile" accept=".csv,.tsv,.txt" multiple>
+  <label for="sampleSelect">Choose a sample file:</label>
+  <select id="sampleSelect">
+    <option value="">Choose a sample</option>
+    <option value="pump">Pump sample</option>
+    <option value="cnc">CNC sample</option>
+    <option value="compressor">Compressor sample</option>
+  </select>
+  <button type="button" id="loadSampleButton">Load sample</button>
 
   <label for="machineSelect">Choose a machine:</label>
   <select id="machineSelect" disabled>
-    <option>Upload data files first</option>
+    <option>Load a sample first</option>
   </select>
 
   <section id="output" aria-live="polite">
-    Choose a data file to begin.
+    Choose a sample file to begin.
   </section>
 
   <section>
     <h2>Machine Status Table</h2>
-    <p id="tableMessage">Upload data files to see machine statuses.</p>
+    <p id="tableMessage">No machine readings loaded.</p>
 
     <div class="table-wrap">
       <table>
@@ -122,13 +136,20 @@
   </section>
 
   <script>
-    const fileInput = document.getElementById("csvFile");
     const machineSelect = document.getElementById("machineSelect");
     const output = document.getElementById("output");
     const statusTable = document.getElementById("statusTable");
     const tableMessage = document.getElementById("tableMessage");
+    const sampleSelect = document.getElementById("sampleSelect");
+    const loadSampleButton = document.getElementById("loadSampleButton");
 
     let readings = [];
+
+    const sampleFilePaths = {
+      pump: "samples/pump.csv",
+      cnc: "samples/cnc.csv",
+      compressor: "samples/compressor.csv"
+    };
 
     function splitLine(line, delimiter) {
       const fields = [];
@@ -204,7 +225,6 @@
           return { status: "Invalid data", error: true };
         }
 
-        // Fictional demo thresholds.
         if (temperature >= 65 || vibration >= 1.0 || wear >= 70) {
           return { status: "Critical", error: false };
         }
@@ -223,7 +243,6 @@
         return { status: "Invalid data", error: true };
       }
 
-      // Fictional demo thresholds.
       if (temperature >= 58 || vibration >= 1.0 || pressure <= 100) {
         return { status: "Critical", error: false };
       }
@@ -295,98 +314,112 @@
         : "No machine readings were found.";
     }
 
-    fileInput.addEventListener("change", async () => {
-      const files = [...fileInput.files];
-
-      readings = [];
+    function fillMachineSelector() {
       machineSelect.replaceChildren();
-      machineSelect.disabled = true;
-      statusTable.replaceChildren();
 
-      if (files.length === 0) {
-        output.textContent = "Choose one or more data files to begin.";
-        tableMessage.textContent =
-          "Upload data files to see machine statuses.";
+      const machineIds =
+        [...new Set(readings.map(row => row.machine_id).filter(Boolean))];
+
+      if (machineIds.length === 0) {
+        const option = document.createElement("option");
+        option.textContent = "No machines found";
+        machineSelect.appendChild(option);
+        machineSelect.disabled = true;
+        return;
+      }
+
+      for (const id of machineIds) {
+        const option = document.createElement("option");
+        option.value = id;
+        option.textContent = id;
+        machineSelect.appendChild(option);
+      }
+
+      machineSelect.disabled = false;
+    }
+
+    loadSampleButton.addEventListener("click", async () => {
+      const sampleName = sampleSelect.value;
+      const path = sampleFilePaths[sampleName];
+
+      if (!path) {
+        output.textContent = "Choose a sample file first.";
         return;
       }
 
       try {
-        for (const file of files) {
-          const text = (await file.text()).trim();
+        const url = new URL(path, document.baseURI);
+        const response = await fetch(url);
 
-          if (!text) {
-            throw new Error(file.name + " is empty.");
-          }
+        if (!response.ok) {
+          throw new Error(
+            `Could not load ${path} (HTTP ${response.status}).`
+          );
+        }
 
-          const lines = text.split(/\r?\n/);
-          const delimiter = lines[0].includes("\t") ? "\t" : ",";
-          const headers = splitLine(lines[0], delimiter)
-            .map(header =>
-              header.replace(/^\uFEFF/, "").trim().toLowerCase()
-            );
+        const text = (await response.text()).trim();
+
+        if (!text) {
+          throw new Error(path + " is empty.");
+        }
+
+        const lines = text.split(/\r?\n/);
+        const delimiter = lines[0].includes("\t") ? "\t" : ",";
+        const headers = splitLine(lines[0], delimiter)
+          .map(header =>
+            header.replace(/^\uFEFF/, "").trim().toLowerCase()
+          );
 
         const hasPumpColumns =
-  ["machine_id", "temperature", "vibration", "pressure"]
-    .every(header => headers.includes(header));
+          ["machine_id", "temperature", "vibration", "pressure"]
+            .every(header => headers.includes(header));
 
-const hasCncColumns =
-  ["machine_id", "spindle_temperature", "vibration", "spindle_speed", "tool_wear"]
-    .every(header => headers.includes(header));
+        const hasCncColumns =
+          ["machine_id", "spindle_temperature", "vibration",
+           "spindle_speed", "tool_wear"]
+            .every(header => headers.includes(header));
 
-const hasCompressorColumns =
-  ["machine_id", "discharge_pressure", "temperature",
-   "vibration", "running_hours", "status"]
-    .every(header => headers.includes(header));
+        const hasCompressorColumns =
+          ["machine_id", "discharge_pressure", "temperature",
+           "vibration", "running_hours", "status"]
+            .every(header => headers.includes(header));
 
-if (!(hasPumpColumns || hasCncColumns || hasCompressorColumns)) {
-  throw new Error(
-    file.name + " must contain the columns for one machine type: pump, CNC, or compressor."
-  );
-}
-        
-
-          const fileReadings = lines.slice(1)
-            .filter(line => line.trim() !== "")
-            .map(line => {
-              const values = splitLine(line, delimiter);
-
-              return Object.fromEntries(
-                headers.map((header, index) => [
-                  header,
-                  values[index] ? values[index].trim() : ""
-                ])
-              );
-            })
-            .filter(row => row.machine_id);
-
-          readings.push(...fileReadings);
+        if (!(hasPumpColumns || hasCncColumns || hasCompressorColumns)) {
+          throw new Error(
+            path +
+            " must contain columns for a pump, CNC machine, or compressor."
+          );
         }
 
-        const machineIds = [
-          ...new Set(readings.map(row => row.machine_id))
-        ];
+        readings = lines.slice(1)
+          .filter(line => line.trim() !== "")
+          .map(line => {
+            const values = splitLine(line, delimiter);
 
-        if (machineIds.length === 0) {
-          output.textContent =
-            "No machine readings were found in the selected files.";
-          tableMessage.textContent = "No machine readings were found.";
-          return;
+            return Object.fromEntries(
+              headers.map((header, index) => [
+                header,
+                values[index] ? values[index].trim() : ""
+              ])
+            );
+          })
+          .filter(row => row.machine_id);
+
+        if (readings.length === 0) {
+          throw new Error("The selected sample file has no machine readings.");
         }
 
-        for (const id of machineIds) {
-          const option = document.createElement("option");
-          option.value = id;
-          option.textContent = id;
-          machineSelect.appendChild(option);
-        }
-
-        machineSelect.disabled = false;
+        fillMachineSelector();
         renderTable();
         showSelectedMachine();
       } catch (error) {
         readings = [];
-        output.textContent = error.message;
-        tableMessage.textContent = "Could not load the selected files.";
+        fillMachineSelector();
+        statusTable.replaceChildren();
+        tableMessage.textContent = "Could not load the sample file.";
+        output.textContent =
+          error.message +
+          " Check that the file is deployed inside the samples folder.";
       }
     });
 
@@ -394,10 +427,9 @@ if (!(hasPumpColumns || hasCncColumns || hasCompressorColumns)) {
 
     function showSelectedMachine() {
       const selectedId = machineSelect.value;
-      const machineReadings =
-        readings.filter(row => row.machine_id === selectedId);
-      const latest =
-        machineReadings[machineReadings.length - 1];
+      const latest = readings
+        .filter(row => row.machine_id === selectedId)
+        .at(-1);
 
       if (!latest) {
         output.textContent = "No reading found for this machine.";
@@ -412,9 +444,7 @@ if (!(hasPumpColumns || hasCncColumns || hasCompressorColumns)) {
       const title = document.createElement("div");
       title.id = "result";
 
-      if (
-        ["Healthy", "Warning", "Critical"].includes(result.status)
-      ) {
+      if (["Healthy", "Warning", "Critical"].includes(result.status)) {
         title.className = result.status;
       }
 
