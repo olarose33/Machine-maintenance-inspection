@@ -325,28 +325,25 @@
               header.replace(/^\uFEFF/, "").trim().toLowerCase()
             );
 
-          const hasPumpColumns =
-            ["machine_id", "temperature", "vibration", "pressure"]
-              .every(header => headers.includes(header));
+        const hasPumpColumns =
+  ["machine_id", "temperature", "vibration", "pressure"]
+    .every(header => headers.includes(header));
 
-          const hasCncColumns =
-            ["machine_id", "spindle_temperature", "vibration",
-             "spindle_speed", "tool_wear"]
-              .every(header => headers.includes(header));
+const hasCncColumns =
+  ["machine_id", "spindle_temperature", "vibration", "spindle_speed", "tool_wear"]
+    .every(header => headers.includes(header));
 
-          const hasCompressorColumns =
-            ["machine_id", "discharge_pressure", "temperature",
-             "vibration", "running_hours", "status"]
-              .every(header => headers.includes(header));
+const hasCompressorColumns =
+  ["machine_id", "discharge_pressure", "temperature",
+   "vibration", "running_hours", "status"]
+    .every(header => headers.includes(header));
 
-          if (!hasPumpColumns && !hasCncColumns && !hasCompressorColumns) {
-            throw new Error(
-              file.name +
-              " has unrecognized columns. The compressor headers must include " +
-              "machine_id, discharge_pressure, temperature, vibration, " +
-              "running_hours, and status."
-            );
-          }
+if (!(hasPumpColumns || hasCncColumns || hasCompressorColumns)) {
+  throw new Error(
+    file.name + " must contain the columns for one machine type: pump, CNC, or compressor."
+  );
+}
+        
 
           const fileReadings = lines.slice(1)
             .filter(line => line.trim() !== "")
