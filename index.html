@@ -1,1 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pump Health Checker</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 700px; margin: 40px auto; padding: 0 16px; }
+    section { background: #f2f5f7; border-radius: 8px; padding: 20px; margin-top: 20px; }
+    button { padding: 10px 16px; cursor: pointer; }
+    #result { font-size: 1.3rem; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>Pump Health Checker</h1>
+  <p>Upload a CSV containing temperature, vibration, and pressure columns.</p>
+  <p><strong>Demo only:</strong> this uses sample thresholds, not real pump limits or maintenance advice.</p>
 
+  <input type="file" id="csvFile" accept=".csv">
+  <button onclick="checkPump()">Check pump</button>
+
+  <section id="output" aria-live="polite">Choose a CSV file to begin.</section>
+
+  <script>
+    function checkPump() {
+      const file = document.getElementById("csvFile").files[0];
+      const output = document.getElementById("output");
+
+      if (!file) {
+        output.textContent = "Please choose a CSV file first.";
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const lines = reader.result.trim().split(/\r?\n/);
+        if (lines.length < 2) {
+          output.textContent = "The CSV needs a header row and at least one reading.";
+          return;
+        }
+
+        const headers = lines[0].split(",").map(h => h.trim().toLowerCase());
+        const values = lines[lines.length - 1].split(",").map(v => v.trim());
+        const row = Object.fromEntries(headers.map((h, i) => [h, values[i]]));
+
+        const temperature = Number(row.temperature);
+        const vibration = Number(row.vibration);
+        const pressure = Number(row.pressure);
+
+        if (![temperature, vibration, pressure].every(Number.isFinite)) {
+          output.textContent = "Could not read temperature, vibration, and pressure. Check your CSV column names.";
+          return;
+        }
+
+        let status = "Healthy";
+        if (temperature >= 58 || vibration >= 1.0 || pressure <= 100) {
+          status = "Critical";
+        } else if (temperature >= 50 || vibration >= 0.7 || pressure <= 110) {
+          status = "Warning";
+        }
+
+        output.innerHTML = `
+          <div id="result">Demo status: ${status}</div>
+          <p>Using the last reading in your CSV:</p>
+          <ul>
+            <li>Temperature: ${temperature}</li>
+            <li>Vibration: ${vibration}</li>
+            <li>Pressure: ${pressure}</li>
+          </ul>`;
+      };
+
+      reader.readAsText(file);
+    }
+  </script>
+</body>
+</html>
