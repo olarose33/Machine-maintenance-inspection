@@ -5,71 +5,192 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Pump Health Checker</title>
   <style>
-    body { font-family: Arial, sans-serif; max-width: 700px; margin: 40px auto; padding: 0 16px; }
-    section { background: #f2f5f7; border-radius: 8px; padding: 20px; margin-top: 20px; }
-    button { padding: 10px 16px; cursor: pointer; }
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 700px;
+      margin: 40px auto;
+      padding: 0 16px;
+      color: #222;
+    }
+    label { display: block; margin: 16px 0 6px; }
+    select, input, button { font: inherit; padding: 8px; }
+    section {
+      background: #f2f5f7;
+      border-radius: 8px;
+      padding: 20px;
+      margin-top: 20px;
+    }
     #result { font-size: 1.3rem; font-weight: bold; }
+    .note { color: #555; }
   </style>
 </head>
 <body>
   <h1>Pump Health Checker</h1>
-  <p>Upload a CSV containing temperature, vibration, and pressure columns.</p>
-  <p><strong>Demo only:</strong> this uses sample thresholds, not real pump limits or maintenance advice.</p>
+  <p>Upload a data file with machine_id, timestamp, temperature, vibration, and pressure columns.</p>
+  <p class="note"><strong>Demo only:</strong> status thresholds are examples, not real pump limits or maintenance advice.</p>
 
-  <input type="file" id="csvFile" accept=".csv">
-  <button onclick="checkPump()">Check pump</button>
+  <label for="csvFile">Choose your data file:</label>
+  <input type="file" id="csvFile" accept=".csv,.tsv,.txt">
 
-  <section id="output" aria-live="polite">Choose a CSV file to begin.</section>
+  <label for="machineSelect">Choose a machine:</label>
+  <select id="machineSelect" disabled>
+    <option>Upload a data file first</option>
+  </select>
+
+  <section id="output" aria-live="polite">Choose a data file to begin.</section>
 
   <script>
-    function checkPump() {
-      const file = document.getElementById("csvFile").files[0];
-      const output = document.getElementById("output");
+    const fileInput = document.getElementById("csvFile");
+    const machineSelect = document.getElementById("machineSelect");
+    const output = document.getElementById("output");
+    let readings = [];
+
+    function splitLine(line, delimiter) {
+      const fields = [];
+      let value = "";
+      let insideQuotes = false;
+
+      for (let i = 0; i < line.length; i++) {
+        const character = line[i];
+
+        if (character === '"') {
+          if (insideQuotes && line[i + 1] === '"') {
+            value += '"';
+            i++;
+          } else {
+            insideQuotes = !insideQuotes;
+          }
+        } else if (character === delimiter && !insideQuotes) {
+          fields.push(value.trim());
+          value = "";
+        } else {
+          value += character;
+        }
+      }
+
+      fields.push(value.trim());
+      return fields;
+    }
+
+    fileInput.addEventListener("change", () => {
+      const file = fileInput.files[0];
+      readings = [];
+      machineSelect.replaceChildren();
+      machineSelect.disabled = true;
 
       if (!file) {
-        output.textContent = "Please choose a CSV file first.";
+        output.textContent = "Choose a data file to begin.";
         return;
       }
 
       const reader = new FileReader();
+
       reader.onload = () => {
-        const lines = reader.result.trim().split(/\r?\n/);
-        if (lines.length < 2) {
-          output.textContent = "The CSV needs a header row and at least one reading.";
+        const text = reader.result.trim();
+        if (!text) {
+          output.textContent = "The file is empty.";
           return;
         }
 
-        const headers = lines[0].split(",").map(h => h.trim().toLowerCase());
-        const values = lines[lines.length - 1].split(",").map(v => v.trim());
-        const row = Object.fromEntries(headers.map((h, i) => [h, values[i]]));
+        const lines = text.split(/\r?\n/);
+        const delimiter = lines[0].includes("\t") ? "\t" : ",";
+        const headers = splitLine(lines[0], delimiter)
+          .map(header => header.toLowerCase());
 
-        const temperature = Number(row.temperature);
-        const vibration = Number(row.vibration);
-        const pressure = Number(row.pressure);
+        const required = ["machine_id", "temperature", "vibration", "pressure"];
+        const missing = required.filter(header => !headers.includes(header));
 
-        if (![temperature, vibration, pressure].every(Number.isFinite)) {
-          output.textContent = "Could not read temperature, vibration, and pressure. Check your CSV column names.";
+        if (missing.length) {
+          output.textContent = "Missing required column(s): " + missing.join(", ");
           return;
         }
 
-        let status = "Healthy";
-        if (temperature >= 58 || vibration >= 1.0 || pressure <= 100) {
-          status = "Critical";
-        } else if (temperature >= 50 || vibration >= 0.7 || pressure <= 110) {
-          status = "Warning";
+        readings = lines.slice(1)
+          .filter(line => line.trim() !== "")
+          .map(line => {
+            const values = splitLine(line, delimiter);
+            return Object.fromEntries(
+              headers.map((header, index) => [header, values[index] ?? ""])
+            );
+          })
+          .filter(row => row.machine_id);
+
+        const machineIds = [...new Set(readings.map(row => row.machine_id))];
+
+        if (machineIds.length === 0) {
+          output.textContent = "No machine readings were found in the file.";
+          return;
         }
 
-        output.innerHTML = `
-          <div id="result">Demo status: ${status}</div>
-          <p>Using the last reading in your CSV:</p>
-          <ul>
-            <li>Temperature: ${temperature}</li>
-            <li>Vibration: ${vibration}</li>
-            <li>Pressure: ${pressure}</li>
-          </ul>`;
+        for (const id of machineIds) {
+          const option = document.createElement("option");
+          option.value = id;
+          option.textContent = id;
+          machineSelect.appendChild(option);
+        }
+
+        machineSelect.disabled = false;
+        showSelectedMachine();
       };
 
       reader.readAsText(file);
+    });
+
+    machineSelect.addEventListener("change", showSelectedMachine);
+
+    function showSelectedMachine() {
+      const selectedId = machineSelect.value;
+      const machineReadings = readings.filter(row => row.machine_id === selectedId);
+      const latest = machineReadings[machineReadings.length - 1];
+
+      if (!latest) {
+        output.textContent = "No reading found for this machine.";
+        return;
+      }
+
+      const temperature = Number(latest.temperature);
+      const vibration = Number(latest.vibration);
+      const pressure = Number(latest.pressure);
+
+      if (![temperature, vibration, pressure].every(Number.isFinite)) {
+        output.textContent = "A temperature, vibration, or pressure value is missing or not numeric.";
+        return;
+      }
+
+      let status = "Healthy";
+      if (temperature >= 58 || vibration >= 1.0 || pressure <= 100) {
+        status = "Critical";
+      } else if (temperature >= 50 || vibration >= 0.7 || pressure <= 110) {
+        status = "Warning";
+      }
+
+      output.replaceChildren();
+
+      const title = document.createElement("div");
+      title.id = "result";
+      title.textContent = "Demo status: " + status;
+
+      const details = document.createElement("p");
+      details.textContent = "Latest reading for " + selectedId +
+        (latest.timestamp ? " at " + latest.timestamp : "") + ":";
+
+      const list = document.createElement("ul");
+      const fields = [
+        ["Temperature", latest.temperature],
+        ["Vibration", latest.vibration],
+        ["Pressure", latest.pressure],
+        ["Flow rate", latest.flow_rate]
+      ];
+
+      for (const [label, value] of fields) {
+        if (value !== undefined && value !== "") {
+          const item = document.createElement("li");
+          item.textContent = label + ": " + value;
+          list.appendChild(item);
+        }
+      }
+
+      output.append(title, details, list);
     }
   </script>
 </body>
