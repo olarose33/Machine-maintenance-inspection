@@ -5,13 +5,27 @@ title: Machine Status Checker
 
 <style>
   .landing {
-    max-width: 760px;
+    max-width: 900px;
     margin: 2rem auto;
+  }
+
+  .hero {
     text-align: center;
   }
 
-  .landing p {
-    font-size: 1.1rem;
+  .hero-image {
+    width: 100%;
+    max-height: 420px;
+    border-radius: 10px;
+    object-fit: cover;
+  }
+
+  .purpose {
+    margin-top: 2rem;
+  }
+
+  .purpose ul {
+    padding-left: 1.25rem;
   }
 
   .landing-button {
@@ -31,8 +45,39 @@ title: Machine Status Checker
 </style>
 
 <main class="landing">
-  <h1>Machine Status Checker</h1>
-  <p>Monitor pump, CNC, and compressor readings using interactive sample data.</p>
+  <div class="hero">
+    <img
+      class="hero-image"
+      src="{{ '/assets/factory-machines.jpg' | relative_url }}"
+      alt="Industrial pumps and machines in a factory"
+    >
+
+    <h1>Machine Status Checker</h1>
+
+    <p>
+      A simple monitoring tool for reviewing the condition of industrial
+      pumps, CNC machines, and compressors.
+    </p>
+  </div>
+
+  <section class="purpose">
+    <h2>Purpose</h2>
+
+    <p>
+      The Machine Status Checker helps operators and maintenance teams
+      quickly inspect machine readings and identify healthy, warning,
+      or critical conditions. It reduces the need to manually compare
+      temperature, vibration, pressure, spindle, and operating data.
+    </p>
+
+    <h2>What you can check</h2>
+    <ul>
+      <li>Pump temperature, vibration, pressure, and flow rate</li>
+      <li>CNC spindle temperature, vibration, speed, and tool wear</li>
+      <li>Compressor pressure, temperature, vibration, and operating hours</li>
+      <li>The latest reading for every machine in a CSV sample</li>
+    </ul>
+  </section>
 
   <a class="landing-button" href="{{ '/app.html' | relative_url }}">
     Open the Status Checker
